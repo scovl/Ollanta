@@ -3,7 +3,7 @@ package scan_test
 import (
 	"testing"
 
-	"github.com/user/ollanta/ollantascanner/scan"
+	"github.com/scovl/ollanta/ollantascanner/scan"
 )
 
 func TestParseFlags_Defaults(t *testing.T) {

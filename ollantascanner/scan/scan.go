@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	parlanguages "github.com/user/ollanta/ollantaparser/languages"
-	"github.com/user/ollanta/ollantarules/defaults"
-	gosensor "github.com/user/ollanta/ollantarules/languages/golang"
-	tssensor "github.com/user/ollanta/ollantarules/languages/treesitter"
-	"github.com/user/ollanta/ollantascanner/discovery"
-	"github.com/user/ollanta/ollantascanner/executor"
-	"github.com/user/ollanta/ollantascanner/report"
+	parlanguages "github.com/scovl/ollanta/ollantaparser/languages"
+	"github.com/scovl/ollanta/ollantarules/defaults"
+	gosensor "github.com/scovl/ollanta/ollantarules/languages/golang"
+	tssensor "github.com/scovl/ollanta/ollantarules/languages/treesitter"
+	"github.com/scovl/ollanta/ollantascanner/discovery"
+	"github.com/scovl/ollanta/ollantascanner/executor"
+	"github.com/scovl/ollanta/ollantascanner/report"
 )
 
 // ScanOptions holds every parameter that controls a scan run.
@@ -30,8 +30,10 @@ type ScanOptions struct {
 	ProjectKey string
 	Format     string // "summary" | "json" | "sarif" | "all"
 	Debug      bool
-	Serve      bool // open local web UI after scan
-	Port       int  // port for -serve (default 7777)
+	Serve      bool   // open local web UI after scan
+	Port       int    // port for -serve (default 7777)
+	Bind       string // bind address for -serve (default 127.0.0.1)
+	Server     string // URL of ollantaweb server for push mode (empty = disabled)
 }
 
 // ParseFlags parses args (typically os.Args[1:]) into ScanOptions.
@@ -47,6 +49,8 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 	debug := fs.Bool("debug", false, "Enable debug output")
 	serve := fs.Bool("serve", false, "Open interactive web UI after scan")
 	port := fs.Int("port", 7777, "Port for -serve")
+	bind := fs.String("bind", "127.0.0.1", "Bind address for -serve (use 0.0.0.0 inside Docker)")
+	serverURL := fs.String("server", "", "URL of ollantaweb server to push results to (e.g. http://localhost:8080)")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -65,6 +69,8 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 		Debug:      *debug,
 		Serve:      *serve,
 		Port:       *port,
+		Bind:       *bind,
+		Server:     *serverURL,
 	}
 
 	for _, s := range strings.Split(*sources, ",") {

@@ -25,9 +25,10 @@ var staticFiles embed.FS
 //   - GET /app.js     → compiled TypeScript bundle
 //   - GET /report.json → the report file from reportPath
 //
-// It listens on the given port and logs the URL to stdout.
+// It listens on bind:port (e.g. "127.0.0.1" for local-only, "0.0.0.0" for
+// container/remote access) and logs the URL to stdout.
 // The function blocks until the server is stopped.
-func Serve(reportPath string, port int) error {
+func Serve(reportPath, bind string, port int) error {
 	distFS, err := fs.Sub(staticFiles, "static/dist")
 	if err != nil {
 		return fmt.Errorf("server: embed sub: %w", err)
@@ -50,7 +51,7 @@ func Serve(reportPath string, port int) error {
 	// Serve static assets from the embedded dist/ directory
 	mux.Handle("/", http.FileServer(http.FS(distFS)))
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("%s:%d", bind, port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("server: listen %s: %w", addr, err)
