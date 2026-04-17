@@ -43,6 +43,11 @@ func main() {
 	scanRepo := postgres.NewScanRepository(db)
 	issueRepo := postgres.NewIssueRepository(db)
 	measureRepo := postgres.NewMeasureRepository(db)
+	userRepo := postgres.NewUserRepository(db)
+	groupRepo := postgres.NewGroupRepository(db)
+	tokenRepo := postgres.NewTokenRepository(db)
+	sessionRepo := postgres.NewSessionRepository(db)
+	permRepo := postgres.NewPermissionRepository(db)
 
 	// ── Meilisearch ────────────────────────────────────────────────────────
 	indexerCfg := search.IndexerConfig{
@@ -73,8 +78,10 @@ func main() {
 
 	// ── HTTP server ────────────────────────────────────────────────────────
 	router := api.NewRouter(
+		cfg,
 		projectRepo, scanRepo, issueRepo, measureRepo,
-		searcher, indexer, projectRepo, pipeline,
+		userRepo, groupRepo, tokenRepo, sessionRepo, permRepo,
+		searcher, indexer, pipeline,
 	)
 
 	srv := &http.Server{
