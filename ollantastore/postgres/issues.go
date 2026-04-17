@@ -11,24 +11,24 @@ import (
 
 // IssueRow is the database representation of a single issue.
 type IssueRow struct {
-	ID            int64
-	ScanID        int64
-	ProjectID     int64
-	RuleKey       string
-	ComponentPath string
-	Line          int
-	Column        int
-	EndLine       int
-	EndColumn     int
-	Message       string
-	Type          string
-	Severity      string
-	Status        string
-	Resolution    string
-	EffortMinutes int
-	LineHash      string
-	Tags          []string
-	CreatedAt     time.Time
+	ID            int64     `json:"id"`
+	ScanID        int64     `json:"scan_id"`
+	ProjectID     int64     `json:"project_id"`
+	RuleKey       string    `json:"rule_key"`
+	ComponentPath string    `json:"component_path"`
+	Line          int       `json:"line"`
+	Column        int       `json:"column"`
+	EndLine       int       `json:"end_line"`
+	EndColumn     int       `json:"end_column"`
+	Message       string    `json:"message"`
+	Type          string    `json:"type"`
+	Severity      string    `json:"severity"`
+	Status        string    `json:"status"`
+	Resolution    string    `json:"resolution"`
+	EffortMinutes int       `json:"effort_minutes"`
+	LineHash      string    `json:"line_hash"`
+	Tags          []string  `json:"tags"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // IssueFilter specifies query parameters for listing issues.

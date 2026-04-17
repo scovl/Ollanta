@@ -11,26 +11,26 @@ import (
 
 // Scan is the canonical scan record stored in PostgreSQL.
 type Scan struct {
-	ID                   int64
-	ProjectID            int64
-	Version              string
-	Branch               string
-	CommitSHA            string
-	Status               string
-	ElapsedMs            int64
-	GateStatus           string
-	AnalysisDate         time.Time
-	CreatedAt            time.Time
-	TotalFiles           int
-	TotalLines           int
-	TotalNcloc           int
-	TotalComments        int
-	TotalIssues          int
-	TotalBugs            int
-	TotalCodeSmells      int
-	TotalVulnerabilities int
-	NewIssues            int
-	ClosedIssues         int
+	ID                   int64     `json:"id"`
+	ProjectID            int64     `json:"project_id"`
+	Version              string    `json:"version"`
+	Branch               string    `json:"branch"`
+	CommitSHA            string    `json:"commit_sha"`
+	Status               string    `json:"status"`
+	ElapsedMs            int64     `json:"elapsed_ms"`
+	GateStatus           string    `json:"gate_status"`
+	AnalysisDate         time.Time `json:"analysis_date"`
+	CreatedAt            time.Time `json:"created_at"`
+	TotalFiles           int       `json:"total_files"`
+	TotalLines           int       `json:"total_lines"`
+	TotalNcloc           int       `json:"total_ncloc"`
+	TotalComments        int       `json:"total_comments"`
+	TotalIssues          int       `json:"total_issues"`
+	TotalBugs            int       `json:"total_bugs"`
+	TotalCodeSmells      int       `json:"total_code_smells"`
+	TotalVulnerabilities int       `json:"total_vulnerabilities"`
+	NewIssues            int       `json:"new_issues"`
+	ClosedIssues         int       `json:"closed_issues"`
 }
 
 // ScanRepository provides access to the scans table.
