@@ -1,0 +1,149 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/scovl/ollanta/adapter/secondary/postgres"
+	"github.com/scovl/ollanta/domain/model"
+)
+
+// IssuesHandler handles issue-related endpoints.
+type IssuesHandler struct {
+	issues   *postgres.IssueRepository
+	projects *postgres.ProjectRepository
+}
+
+// List handles GET /api/v1/issues with optional filter query params.
+//
+// Query params: project_id, scan_id, rule_key, severity, type, status, file, limit, offset
+func (h *IssuesHandler) List(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := model.IssueFilter{}
+
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			f.Limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			f.Offset = n
+		}
+	}
+	if v := q.Get("project_id"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			f.ProjectID = &n
+		}
+	}
+	if v := q.Get("scan_id"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			f.ScanID = &n
+		}
+	}
+	if v := q.Get("rule_key"); v != "" {
+		f.RuleKey = &v
+	}
+	if v := q.Get("severity"); v != "" {
+		f.Severity = &v
+	}
+	if v := q.Get("type"); v != "" {
+		f.Type = &v
+	}
+	if v := q.Get("status"); v != "" {
+		f.Status = &v
+	}
+	if v := q.Get("file"); v != "" {
+		f.FilePath = &v
+	}
+
+	issues, total, err := h.issues.Query(r.Context(), f)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, map[string]interface{}{
+		"items":  issues,
+		"total":  total,
+		"limit":  f.Limit,
+		"offset": f.Offset,
+	})
+}
+
+// Facets handles GET /api/v1/issues/facets?project_id=1&scan_id=2.
+func (h *IssuesHandler) Facets(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	var projectID, scanID int64
+	if v := q.Get("project_id"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid project_id")
+			return
+		}
+		projectID = n
+	}
+	if v := q.Get("scan_id"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid scan_id")
+			return
+		}
+		scanID = n
+	}
+
+	facets, err := h.issues.Facets(r.Context(), projectID, scanID)
+	if errors.Is(err, model.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, facets)
+}
+
+// Transition handles POST /api/v1/issues/{id}/transition.
+// Allowed resolutions: false_positive, wont_fix, confirmed, fixed, "" (reopen).
+func (h *IssuesHandler) Transition(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid issue id")
+		return
+	}
+
+	var req struct {
+		Resolution string `json:"resolution"`
+		Comment    string `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	// Determine target status from resolution.
+	toStatus := "closed"
+	if req.Resolution == "" {
+		toStatus = "open" // reopen
+	}
+
+	user := UserFromContext(r.Context())
+	var userID int64
+	if user != nil {
+		userID = user.ID
+	}
+
+	if err := h.issues.Transition(r.Context(), id, userID, toStatus, req.Resolution, req.Comment); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			jsonError(w, http.StatusNotFound, "issue not found")
+			return
+		}
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
