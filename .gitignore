@@ -1,0 +1,17 @@
+# Output directories
+.ollanta/
+
+# Go build artifacts
+*.exe
+*.out
+*.test
+*.prof
+
+# Go workspace sum
+go.work.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

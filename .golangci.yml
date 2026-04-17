@@ -1,0 +1,35 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+  exclusions:
+    rules:
+      # Interface implementations don't need per-method comments.
+      - linters: [revive]
+        text: 'exported method .* should have comment'
+      # defer f.Close() ignoring the error is the standard Go pattern.
+      - linters: [errcheck]
+        text: 'Error return value of `.*\.Close` is not checked'
+      # TreeSitterSensor in package treesitter is a deliberate name choice.
+      - linters: [revive]
+        text: 'stutters'
+      # Version constant in report package is self-documenting.
+      - linters: [revive]
+        text: 'exported const Version'
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: package-comments
+        severity: warning

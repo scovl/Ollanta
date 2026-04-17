@@ -1,0 +1,33 @@
+.PHONY: build test lint fmt clean
+
+PKGS := \
+	github.com/user/ollanta/ollantacore/... \
+	github.com/user/ollanta/ollantaparser/... \
+	github.com/user/ollanta/ollantarules/... \
+	github.com/user/ollanta/ollantascanner/... \
+	github.com/user/ollanta/ollantaengine/...
+
+DIRS := ollantacore ollantaparser ollantarules ollantascanner ollantaengine
+
+# CGO is required by go-tree-sitter. On Windows, point to the MSYS2 MinGW gcc.
+export CGO_ENABLED := 1
+export PATH := C:\msys64\mingw64\bin;$(PATH)
+
+build:
+	go build $(PKGS)
+
+test:
+	go test $(PKGS)
+
+lint:
+	golangci-lint run ./ollantacore/...
+	golangci-lint run ./ollantaparser/...
+	golangci-lint run ./ollantarules/...
+	golangci-lint run ./ollantascanner/...
+	golangci-lint run ./ollantaengine/...
+
+fmt:
+	gofmt -w $(DIRS)
+
+clean:
+	go clean $(PKGS)
