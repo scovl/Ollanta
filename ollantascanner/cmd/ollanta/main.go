@@ -2,12 +2,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
-	"github.com/user/ollanta/ollantascanner/scan"
-	"github.com/user/ollanta/ollantascanner/server"
+	"github.com/scovl/ollanta/ollantascanner/report"
+	"github.com/scovl/ollanta/ollantascanner/scan"
+	"github.com/scovl/ollanta/ollantascanner/server"
 )
 
 func main() {
@@ -55,10 +59,47 @@ func main() {
 	}
 
 	if opts.Serve {
-		if err := server.Serve(reportPath, opts.Port); err != nil {
+		if err := server.Serve(reportPath, opts.Bind, opts.Port); err != nil {
 			fmt.Fprintln(os.Stderr, "server error:", err)
 			os.Exit(1)
 		}
 	}
+
+	if opts.Server != "" {
+		result, err := pushReport(opts.Server, r)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: server push failed: %v\n", err)
+		} else {
+			fmt.Printf("Server: gate=%s new=%d closed=%d\n",
+				result["gate_status"], result["new_issues"], result["closed_issues"])
+			if gs, _ := result["gate_status"].(string); gs == "ERROR" {
+				os.Exit(1)
+			}
+		}
+	}
+}
+
+// pushReport POSTs the scan report to the given server URL and returns the parsed response body.
+func pushReport(serverURL string, r *report.Report) (map[string]interface{}, error) {
+	body, err := json.Marshal(r)
+	if err != nil {
+		return nil, fmt.Errorf("marshal report: %w", err)
+	}
+
+	resp, err := http.Post(serverURL+"/api/v1/scans", "application/json", bytes.NewReader(body)) //nolint:noctx
+	if err != nil {
+		return nil, fmt.Errorf("post: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return result, nil
 }
 
