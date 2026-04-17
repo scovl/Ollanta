@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -261,4 +262,99 @@ func (r *IssueRepository) CountByProject(ctx context.Context, projectID int64) (
 		"SELECT COUNT(*) FROM issues WHERE project_id = $1", projectID,
 	).Scan(&n)
 	return n, err
+}
+
+// GetByID returns a single issue by ID.
+func (r *IssueRepository) GetByID(ctx context.Context, id int64) (*IssueRow, error) {
+	iss := &IssueRow{}
+	err := r.db.Pool.QueryRow(ctx, `
+		SELECT id, scan_id, project_id, rule_key, component_path,
+		       line, column_num, end_line, end_column, message,
+		       type, severity, status, resolution, effort_minutes,
+		       line_hash, tags, created_at
+		FROM issues WHERE id = $1 LIMIT 1`, id,
+	).Scan(
+		&iss.ID, &iss.ScanID, &iss.ProjectID, &iss.RuleKey, &iss.ComponentPath,
+		&iss.Line, &iss.Column, &iss.EndLine, &iss.EndColumn, &iss.Message,
+		&iss.Type, &iss.Severity, &iss.Status, &iss.Resolution, &iss.EffortMinutes,
+		&iss.LineHash, &iss.Tags, &iss.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return iss, err
+}
+
+// IssueTransition represents a status change for an issue.
+type IssueTransition struct {
+	ID         int64     `json:"id"`
+	IssueID    int64     `json:"issue_id"`
+	UserID     int64     `json:"user_id"`
+	FromStatus string    `json:"from_status"`
+	ToStatus   string    `json:"to_status"`
+	Resolution string    `json:"resolution"`
+	Comment    string    `json:"comment"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// validTransitions maps allowed from→to status transitions.
+var validTransitions = map[string][]string{
+	"open":   {"closed", "confirmed"},
+	"closed": {"open"},
+}
+
+// validResolutions are the allowed resolution values for closing issues.
+var validResolutions = map[string]bool{
+	"false_positive": true,
+	"wont_fix":       true,
+	"confirmed":      true,
+	"fixed":          true,
+	"":               true, // reopen
+}
+
+// Transition applies a status change to an issue and records the transition history.
+func (r *IssueRepository) Transition(ctx context.Context, issueID, userID int64, toStatus, resolution, comment string) error {
+	if !validResolutions[resolution] {
+		return fmt.Errorf("invalid resolution: %s", resolution)
+	}
+
+	iss, err := r.GetByID(ctx, issueID)
+	if err != nil {
+		return err
+	}
+
+	allowed := validTransitions[iss.Status]
+	found := false
+	for _, s := range allowed {
+		if s == toStatus {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("transition from %s to %s is not allowed", iss.Status, toStatus)
+	}
+
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	_, err = tx.Exec(ctx, `
+		UPDATE issues SET status = $1, resolution = $2 WHERE id = $3`,
+		toStatus, resolution, issueID)
+	if err != nil {
+		return fmt.Errorf("update issue: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO issue_transitions (issue_id, user_id, from_status, to_status, resolution, comment)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		issueID, userID, iss.Status, toStatus, resolution, comment)
+	if err != nil {
+		return fmt.Errorf("insert transition: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
