@@ -1,4 +1,4 @@
-// Package rules bridges the ollantarules.Analyzer interface (which uses ollantacore/domain
+// Package rules bridges the ollantarules.Rule type (which uses ollantacore/domain
 // and ollantaparser types) to the domain/port.IAnalyzer interface consumed by the
 // application layer.
 package rules
@@ -13,29 +13,29 @@ import (
 	"github.com/scovl/ollanta/domain/port"
 )
 
-// AnalyzerBridge wraps an ollantarules.Analyzer to implement port.IAnalyzer.
+// AnalyzerBridge wraps an ollantarules.Rule to implement port.IAnalyzer.
 type AnalyzerBridge struct {
-	inner ollantarules.Analyzer
+	inner ollantarules.Rule
 }
 
 // compile-time check
 var _ port.IAnalyzer = (*AnalyzerBridge)(nil)
 
-// Wrap creates an AnalyzerBridge for the given analyzer.
-func Wrap(a ollantarules.Analyzer) *AnalyzerBridge {
+// Wrap creates an AnalyzerBridge for the given rule.
+func Wrap(a ollantarules.Rule) *AnalyzerBridge {
 	return &AnalyzerBridge{inner: a}
 }
 
-func (b *AnalyzerBridge) Key() string             { return b.inner.Key() }
-func (b *AnalyzerBridge) Name() string            { return b.inner.Name() }
-func (b *AnalyzerBridge) Description() string     { return b.inner.Description() }
-func (b *AnalyzerBridge) Language() string        { return b.inner.Language() }
-func (b *AnalyzerBridge) Type() model.IssueType            { return model.IssueType(b.inner.Type()) }
-func (b *AnalyzerBridge) DefaultSeverity() model.Severity  { return model.Severity(b.inner.DefaultSeverity()) }
-func (b *AnalyzerBridge) Tags() []string                   { return b.inner.Tags() }
+func (b *AnalyzerBridge) Key() string             { return b.inner.Meta.Key }
+func (b *AnalyzerBridge) Name() string            { return b.inner.Meta.Name }
+func (b *AnalyzerBridge) Description() string     { return b.inner.Meta.Description }
+func (b *AnalyzerBridge) Language() string        { return b.inner.Meta.Language }
+func (b *AnalyzerBridge) Type() model.IssueType            { return model.IssueType(b.inner.Meta.Type) }
+func (b *AnalyzerBridge) DefaultSeverity() model.Severity  { return model.Severity(b.inner.Meta.DefaultSeverity) }
+func (b *AnalyzerBridge) Tags() []string                   { return b.inner.Meta.Tags }
 
 func (b *AnalyzerBridge) Params() map[string]model.ParamDef {
-	src := b.inner.Params()
+	src := b.inner.Meta.Params
 	out := make(map[string]model.ParamDef, len(src))
 	for _, p := range src {
 		out[p.Key] = model.ParamDef{
@@ -49,7 +49,7 @@ func (b *AnalyzerBridge) Params() map[string]model.ParamDef {
 }
 
 // Check converts the port.AnalysisContext to ollantarules.AnalysisContext, runs the
-// wrapped rule, and converts resulting issues back to *model.Issue.
+// wrapped rule's CheckFunc, and converts resulting issues back to *model.Issue.
 func (b *AnalyzerBridge) Check(ctx context.Context, ac port.AnalysisContext, issues *[]*model.Issue) error {
 	ruleCtx := &ollantarules.AnalysisContext{
 		Path:     ac.Path,
