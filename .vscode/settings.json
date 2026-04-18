@@ -1,0 +1,10 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": [
+        "ollantarules/languages/**/*.json"
+      ],
+      "url": "./ollantarules/rule-meta.schema.json"
+    }
+  ]
+}
