@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/scovl/ollanta/ollantarules/rule-meta.schema.json",
+  "title": "OllantaRuleMeta",
+  "description": "Metadata for a single Ollanta static analysis rule.",
+  "type": "object",
+  "required": ["key", "name", "language", "type", "severity"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "key": {
+      "type": "string",
+      "description": "Unique rule identifier, e.g. 'go:no-large-functions'.",
+      "pattern": "^[a-z]+:[a-z0-9-]+$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable rule name."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the rule detects and why it matters."
+    },
+    "language": {
+      "type": "string",
+      "description": "Target language: 'go', 'javascript', 'python', or '*'.",
+      "enum": ["go", "javascript", "python", "*"]
+    },
+    "type": {
+      "type": "string",
+      "description": "Issue category.",
+      "enum": ["bug", "code_smell", "vulnerability", "security_hotspot"]
+    },
+    "severity": {
+      "type": "string",
+      "description": "Default severity level.",
+      "enum": ["blocker", "critical", "major", "minor", "info"]
+    },
+    "tags": {
+      "type": "array",
+      "description": "Categorisation labels.",
+      "items": { "type": "string" }
+    },
+    "params": {
+      "type": "array",
+      "description": "Configurable parameters accepted by this rule.",
+      "items": {
+        "type": "object",
+        "required": ["key", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string" },
+          "description": { "type": "string" },
+          "default_value": { "type": "string" },
+          "type": { "type": "string", "enum": ["int", "float", "string", "bool"] }
+        }
+      }
+    }
+  }
+}
