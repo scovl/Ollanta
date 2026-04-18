@@ -1,0 +1,12 @@
+{
+  "key": "go:cognitive-complexity",
+  "name": "Cognitive Complexity",
+  "description": "Functions with high cognitive complexity are hard to understand, test and maintain.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "critical",
+  "tags": ["complexity", "readability"],
+  "params": [
+    {"key": "max_complexity", "description": "Maximum allowed cognitive complexity", "default_value": "15", "type": "int"}
+  ]
+}

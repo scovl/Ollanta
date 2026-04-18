@@ -1,0 +1,12 @@
+{
+  "key": "go:no-large-functions",
+  "name": "No Large Functions",
+  "description": "Functions exceeding the configured line limit are harder to read and maintain.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["size", "complexity"],
+  "params": [
+    {"key": "max_lines", "description": "Maximum allowed lines per function", "default_value": "40", "type": "int"}
+  ]
+}

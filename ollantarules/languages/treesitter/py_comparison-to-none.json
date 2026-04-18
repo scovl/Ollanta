@@ -1,0 +1,9 @@
+{
+  "key": "py:comparison-to-none",
+  "name": "Comparison to None (Python)",
+  "description": "Compare to None using 'is' or 'is not', not '==' or '!='. PEP 8 / SonarQube python:S5727.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "correctness"]
+}

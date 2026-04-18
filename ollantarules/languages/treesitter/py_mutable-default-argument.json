@@ -1,0 +1,9 @@
+{
+  "key": "py:mutable-default-argument",
+  "name": "Mutable Default Argument (Python)",
+  "description": "Using mutable objects (list, dict, set) as default argument values is a common Python pitfall. The same object is shared across all calls.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["bug", "pitfall"]
+}

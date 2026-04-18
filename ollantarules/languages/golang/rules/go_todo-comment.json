@@ -1,0 +1,9 @@
+{
+  "key": "go:todo-comment",
+  "name": "TODO Comment",
+  "description": "TODO, FIXME, HACK and XXX comments signal incomplete or problematic code. Track them as issues instead.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "info",
+  "tags": ["convention"]
+}

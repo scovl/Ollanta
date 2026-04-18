@@ -1,0 +1,9 @@
+{
+  "key": "js:no-console-log",
+  "name": "No console.log (JavaScript)",
+  "description": "console.log and friends should not be left in production code. Use a proper logging library.",
+  "language": "javascript",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "debug"]
+}

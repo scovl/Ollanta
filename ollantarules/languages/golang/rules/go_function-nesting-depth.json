@@ -1,0 +1,12 @@
+{
+  "key": "go:function-nesting-depth",
+  "name": "Function Nesting Depth",
+  "description": "Code nested too deeply is hard to read and maintain. Extract inner logic into separate functions.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["complexity", "readability"],
+  "params": [
+    {"key": "max_depth", "description": "Maximum allowed nesting depth", "default_value": "4", "type": "int"}
+  ]
+}

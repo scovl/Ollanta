@@ -1,0 +1,9 @@
+{
+  "key": "py:broad-except",
+  "name": "Broad Exception Catch (Python)",
+  "description": "Catching broad exceptions like 'Exception' or 'BaseException' hides bugs. Catch specific exceptions instead.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["error-handling", "correctness"]
+}

@@ -1,0 +1,12 @@
+{
+  "key": "go:no-naked-returns",
+  "name": "No Naked Returns",
+  "description": "Naked returns in long functions with named return values make code harder to reason about and are a frequent source of bugs.",
+  "language": "go",
+  "type": "bug",
+  "severity": "critical",
+  "tags": ["correctness", "readability"],
+  "params": [
+    {"key": "min_lines", "description": "Minimum function length to flag naked returns", "default_value": "5", "type": "int"}
+  ]
+}

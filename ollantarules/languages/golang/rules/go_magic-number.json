@@ -1,0 +1,12 @@
+{
+  "key": "go:magic-number",
+  "name": "Magic Number",
+  "description": "Numeric literals used directly in expressions should be replaced with named constants to improve readability.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["readability", "convention"],
+  "params": [
+    {"key": "authorized_numbers", "description": "Comma-separated list of allowed literal values", "default_value": "0,1,2,-1", "type": "string"}
+  ]
+}

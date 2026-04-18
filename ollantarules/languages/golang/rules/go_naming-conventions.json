@@ -1,0 +1,9 @@
+{
+  "key": "go:naming-conventions",
+  "name": "Naming Conventions",
+  "description": "Go naming conventions: exported identifiers must use MixedCaps; underscores in names violate Effective Go guidelines.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "readability"]
+}

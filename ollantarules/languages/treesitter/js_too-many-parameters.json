@@ -1,0 +1,12 @@
+{
+  "key": "js:too-many-parameters",
+  "name": "Too Many Parameters (JavaScript)",
+  "description": "Functions with too many parameters are hard to call correctly and signal a missing abstraction.",
+  "language": "javascript",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["design", "readability"],
+  "params": [
+    {"key": "max_params", "description": "Maximum allowed parameter count", "default_value": "5", "type": "int"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "key": "py:too-many-parameters",
+  "name": "Too Many Parameters (Python)",
+  "description": "Functions with too many parameters are hard to call correctly and signal a missing abstraction.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["design", "readability"],
+  "params": [
+    {"key": "max_params", "description": "Maximum allowed parameter count (excluding self/cls)", "default_value": "5", "type": "int"}
+  ]
+}

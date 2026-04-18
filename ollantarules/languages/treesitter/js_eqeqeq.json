@@ -1,0 +1,9 @@
+{
+  "key": "js:eqeqeq",
+  "name": "Strict Equality (JavaScript)",
+  "description": "Use === and !== instead of == and != to avoid type coercion bugs in JavaScript.",
+  "language": "javascript",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["correctness", "pitfall"]
+}
