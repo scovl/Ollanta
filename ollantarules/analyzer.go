@@ -1,4 +1,4 @@
-// Package ollantarules defines the Analyzer interface — the extension point for all
+// Package ollantarules defines the Rule type — the extension point for all
 // static analysis rules in Ollanta. Rules are dispatched by the GoSensor (go/ast)
 // or the TreeSitterSensor (tree-sitter) depending on the language of the file
 // being analysed.
@@ -12,30 +12,48 @@ import (
 	"github.com/scovl/ollanta/ollantaparser"
 )
 
-// Analyzer is the plugin interface that every analysis rule must satisfy.
-// Implementations are registered in a Registry and dispatched by a sensor.
-type Analyzer interface {
-	// Key returns the unique rule identifier, e.g. "go:no-large-functions".
-	Key() string
-	// Name returns a human-readable rule name.
-	Name() string
+// RuleMeta carries the declarative metadata for a rule.
+// It is a plain data struct — accessible, serialisable, and comparable
+// without instantiating or calling any methods.
+type RuleMeta struct {
+	// Key is the unique rule identifier, e.g. "go:no-large-functions".
+	Key string `json:"key"`
+	// Name is a human-readable rule name.
+	Name string `json:"name"`
 	// Description explains what the rule detects and why it matters.
-	Description() string
-	// Language returns the target language, e.g. "go", "javascript", or "*" for cross-language.
-	Language() string
-	// Type returns the issue category produced by this rule.
-	Type() domain.IssueType
-	// DefaultSeverity returns the default severity for issues found by this rule.
-	DefaultSeverity() domain.Severity
-	// Tags returns categorisation tags.
-	Tags() []string
-	// Params returns the list of configurable parameters with defaults.
-	Params() []domain.ParamDef
-	// Check runs the rule against the given context and returns any issues found.
-	Check(ctx *AnalysisContext) []*domain.Issue
+	Description string `json:"description"`
+	// Language is the target language, e.g. "go", "javascript", or "*" for cross-language.
+	Language string `json:"language"`
+	// Type is the issue category produced by this rule.
+	Type domain.IssueType `json:"type"`
+	// DefaultSeverity is the default severity for issues found by this rule.
+	DefaultSeverity domain.Severity `json:"severity"`
+	// Tags are categorisation labels.
+	Tags []string `json:"tags,omitempty"`
+	// Params is the list of configurable parameters with defaults.
+	Params []domain.ParamDef `json:"params,omitempty"`
 }
 
-// AnalysisContext carries the per-file context passed to each Analyzer.Check call.
+// CheckFunc is the execution signature for a rule.
+// It receives the per-file context and returns any issues found.
+// Implementations must be safe for concurrent use and must not retain
+// any mutable state between calls.
+type CheckFunc func(ctx *AnalysisContext) []*domain.Issue
+
+// Rule is the unit of analysis in Ollanta: declarative metadata paired with
+// imperative detection logic. Rules are declared as package-level var values
+// and registered in a Registry.
+type Rule struct {
+	// MetaKey is the JSON metadata key this rule maps to (e.g. "go:cognitive-complexity").
+	// Set at declaration time; used by MustRegister to bind metadata automatically.
+	MetaKey string
+	// Meta holds all static, serialisable rule information.
+	Meta RuleMeta
+	// Check executes the rule against a file context and returns issues.
+	Check CheckFunc
+}
+
+// AnalysisContext carries the per-file context passed to each CheckFunc.
 // Exactly one of AST or ParsedFile will be non-nil, depending on which sensor
 // is invoking the rule.
 type AnalysisContext struct {

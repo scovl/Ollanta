@@ -1,5 +1,5 @@
 // Package treesitter provides the TreeSitterSensor, which dispatches source files
-// for all non-Go languages through registered Analyzer rules using the
+// for all non-Go languages through registered Rule values using the
 // ollantaparser (tree-sitter) front-end.
 package treesitter
 
@@ -12,7 +12,7 @@ import (
 )
 
 // TreeSitterSensor parses source files with ollantaparser (tree-sitter) and
-// dispatches them to Analyzer rules matching the file's language.
+// dispatches them to Rule values matching the file's language.
 type TreeSitterSensor struct {
 	registry       *ollantarules.Registry
 	parserRegistry *ollantaparser.LanguageRegistry
@@ -49,15 +49,15 @@ func (s *TreeSitterSensor) Analyze(path string, source []byte, lang string, acti
 	}
 	defer pf.Close()
 
-	analyzers := s.registry.FindByLanguage(lang)
+	rules := s.registry.FindByLanguage(lang)
 
 	var issues []*domain.Issue
 
-	for _, a := range analyzers {
-		if activeRules != nil && !activeRules[a.Key()] {
+	for _, a := range rules {
+		if activeRules != nil && !activeRules[a.Meta.Key] {
 			continue
 		}
-		func(a ollantarules.Analyzer) {
+		func(a ollantarules.Rule) {
 			defer func() {
 				if r := recover(); r != nil {
 					_ = r // isolate panicking rules so one bad rule doesn't abort the sensor

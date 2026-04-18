@@ -9,64 +9,49 @@ import (
 
 // TooManyParametersPY flags Python functions with too many parameters.
 // SonarQube equivalent: python:S107.
-type TooManyParametersPY struct{}
+var TooManyParametersPY = ollantarules.Rule{
+	MetaKey: "py:too-many-parameters",
+	Check: func(ctx *ollantarules.AnalysisContext) []*domain.Issue {
+		maxVal := tsParamInt(ctx.Params, "max_params", 5)
+		query := `(function_definition
+          name: (identifier) @fn.name
+          parameters: (parameters) @params
+        ) @fn`
 
-func (r *TooManyParametersPY) Key() string                      { return "py:too-many-parameters" }
-func (r *TooManyParametersPY) Name() string                     { return "Too Many Parameters (Python)" }
-func (r *TooManyParametersPY) Language() string                 { return "python" }
-func (r *TooManyParametersPY) Type() domain.IssueType           { return domain.TypeCodeSmell }
-func (r *TooManyParametersPY) DefaultSeverity() domain.Severity { return domain.SeverityMajor }
-func (r *TooManyParametersPY) Tags() []string                   { return []string{"design", "readability"} }
-func (r *TooManyParametersPY) Description() string {
-	return "Functions with too many parameters are hard to call correctly and signal a missing abstraction."
-}
-func (r *TooManyParametersPY) Params() []domain.ParamDef {
-	return []domain.ParamDef{
-		{Key: "max_params", Description: "Maximum allowed parameter count (excluding self/cls)", DefaultValue: "5", Type: "int"},
-	}
-}
-
-func (r *TooManyParametersPY) Check(ctx *ollantarules.AnalysisContext) []*domain.Issue {
-	maxVal := tsParamInt(ctx.Params, "max_params", 5)
-	query := `(function_definition
-	  name: (identifier) @fn.name
-	  parameters: (parameters) @params
-	) @fn`
-
-	matches, err := ctx.Query.Run(ctx.ParsedFile, query, ctx.Grammar)
-	if err != nil {
-		return nil
-	}
-
-	var issues []*domain.Issue
-	for _, m := range matches {
-		params := m.Captures["params"]
-		fn := m.Captures["fn"]
-		fnName := m.Captures["fn.name"]
-		if params == nil || fn == nil {
-			continue
+		matches, err := ctx.Query.Run(ctx.ParsedFile, query, ctx.Grammar)
+		if err != nil {
+			return nil
 		}
 
-		// Count parameters, skipping self and cls
-		paramText := ctx.Query.Text(ctx.ParsedFile, params)
-		count := countPythonParams(paramText)
-		if count > maxVal {
-			line, _, _, _ := ctx.Query.Position(fn)
-			issue := domain.NewIssue(r.Key(), ctx.Path, line)
-			issue.Severity = r.DefaultSeverity()
-			issue.Type = r.Type()
-			name := ""
-			if fnName != nil {
-				name = ctx.Query.Text(ctx.ParsedFile, fnName)
+		var issues []*domain.Issue
+		for _, m := range matches {
+			params := m.Captures["params"]
+			fn := m.Captures["fn"]
+			fnName := m.Captures["fn.name"]
+			if params == nil || fn == nil {
+				continue
 			}
-			issue.Message = fmt.Sprintf(
-				"Function '%s' has %d parameters (max: %d)",
-				name, count, maxVal,
-			)
-			issues = append(issues, issue)
+
+			paramText := ctx.Query.Text(ctx.ParsedFile, params)
+			count := countPythonParams(paramText)
+			if count > maxVal {
+				line, _, _, _ := ctx.Query.Position(fn)
+				issue := domain.NewIssue("py:too-many-parameters", ctx.Path, line)
+				issue.Severity = domain.SeverityMajor
+				issue.Type = domain.TypeCodeSmell
+				name := ""
+				if fnName != nil {
+					name = ctx.Query.Text(ctx.ParsedFile, fnName)
+				}
+				issue.Message = fmt.Sprintf(
+					"Function '%s' has %d parameters (max: %d)",
+					name, count, maxVal,
+				)
+				issues = append(issues, issue)
+			}
 		}
-	}
-	return issues
+		return issues
+	},
 }
 
 // countPythonParams counts the number of parameters in a Python parameter list

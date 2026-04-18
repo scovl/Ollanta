@@ -21,8 +21,8 @@ func TestRegistry_FindByKey_Found(t *testing.T) {
 	if a == nil {
 		t.Fatal("expected to find go:no-large-functions")
 	}
-	if a.Key() != "go:no-large-functions" {
-		t.Errorf("Key: got %q", a.Key())
+	if a.Meta.Key != "go:no-large-functions" {
+		t.Errorf("Key: got %q", a.Meta.Key)
 	}
 }
 

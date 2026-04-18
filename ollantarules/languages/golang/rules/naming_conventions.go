@@ -14,51 +14,41 @@ import (
 // NamingConventions detects Go identifiers that violate standard naming conventions:
 // exported names must be MixedCaps; unexported names must not contain underscores
 // (except for test functions and blank identifiers).
-type NamingConventions struct{}
+var NamingConventions = ollantarules.Rule{
+	MetaKey: "go:naming-conventions",
+	Check: func(ctx *ollantarules.AnalysisContext) []*domain.Issue {
+		var issues []*domain.Issue
 
-func (r *NamingConventions) Key() string                      { return "go:naming-conventions" }
-func (r *NamingConventions) Name() string                     { return "Naming Conventions" }
-func (r *NamingConventions) Language() string                 { return "go" }
-func (r *NamingConventions) Type() domain.IssueType           { return domain.TypeCodeSmell }
-func (r *NamingConventions) DefaultSeverity() domain.Severity { return domain.SeverityMinor }
-func (r *NamingConventions) Tags() []string                   { return []string{"convention", "readability"} }
-func (r *NamingConventions) Description() string {
-	return "Go naming conventions: exported identifiers must use MixedCaps; underscores in names violate Effective Go guidelines."
-}
-func (r *NamingConventions) Params() []domain.ParamDef { return nil }
-
-func (r *NamingConventions) Check(ctx *ollantarules.AnalysisContext) []*domain.Issue {
-	var issues []*domain.Issue
-
-	ast.Inspect(ctx.AST, func(n ast.Node) bool {
-		switch decl := n.(type) {
-		case *ast.FuncDecl:
-			name := decl.Name.Name
-			if name == "_" || strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") || strings.HasPrefix(name, "Example") {
-				return true
+		ast.Inspect(ctx.AST, func(n ast.Node) bool {
+			switch decl := n.(type) {
+			case *ast.FuncDecl:
+				name := decl.Name.Name
+				if name == "_" || strings.HasPrefix(name, "Test") || strings.HasPrefix(name, "Benchmark") || strings.HasPrefix(name, "Example") {
+					return true
+				}
+				if violation := checkName(name); violation != "" {
+					line := lineOf(ctx.FileSet, decl.Name.Pos())
+					issue := domain.NewIssue("go:naming-conventions", ctx.Path, line)
+					issue.Severity = domain.SeverityMinor
+					issue.Type = domain.TypeCodeSmell
+					issue.Message = fmt.Sprintf("Function '%s' violates naming convention: %s", name, violation)
+					issues = append(issues, issue)
+				}
+			case *ast.TypeSpec:
+				name := decl.Name.Name
+				if violation := checkName(name); violation != "" {
+					line := lineOf(ctx.FileSet, decl.Name.Pos())
+					issue := domain.NewIssue("go:naming-conventions", ctx.Path, line)
+					issue.Severity = domain.SeverityMinor
+					issue.Type = domain.TypeCodeSmell
+					issue.Message = fmt.Sprintf("Type '%s' violates naming convention: %s", name, violation)
+					issues = append(issues, issue)
+				}
 			}
-			if violation := checkName(name); violation != "" {
-				line := lineOf(ctx.FileSet, decl.Name.Pos())
-				issue := domain.NewIssue(r.Key(), ctx.Path, line)
-				issue.Severity = r.DefaultSeverity()
-				issue.Type = r.Type()
-				issue.Message = fmt.Sprintf("Function '%s' violates naming convention: %s", name, violation)
-				issues = append(issues, issue)
-			}
-		case *ast.TypeSpec:
-			name := decl.Name.Name
-			if violation := checkName(name); violation != "" {
-				line := lineOf(ctx.FileSet, decl.Name.Pos())
-				issue := domain.NewIssue(r.Key(), ctx.Path, line)
-				issue.Severity = r.DefaultSeverity()
-				issue.Type = r.Type()
-				issue.Message = fmt.Sprintf("Type '%s' violates naming convention: %s", name, violation)
-				issues = append(issues, issue)
-			}
-		}
-		return true
-	})
-	return issues
+			return true
+		})
+		return issues
+	},
 }
 
 // checkName returns a non-empty violation string if the name breaks Go conventions.

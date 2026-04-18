@@ -69,8 +69,7 @@ func parseGoFile(t *testing.T, path string) *ollantarules.AnalysisContext {
 
 func TestNoLargeFunctions_Detects(t *testing.T) {
 	ctx := parseGoFile(t, fixture("large_function.go"))
-	r := &rules.NoLargeFunctions{}
-	issues := r.Check(ctx)
+	issues := rules.NoLargeFunctions.Check(ctx)
 	if len(issues) == 0 {
 		t.Error("expected at least one issue for large function")
 	}
@@ -78,8 +77,7 @@ func TestNoLargeFunctions_Detects(t *testing.T) {
 
 func TestNoLargeFunctions_Clean(t *testing.T) {
 	ctx := parseGoFile(t, fixture("clean.go"))
-	r := &rules.NoLargeFunctions{}
-	issues := r.Check(ctx)
+	issues := rules.NoLargeFunctions.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("expected no issues in clean file, got %d", len(issues))
 	}
@@ -93,8 +91,7 @@ func Small() {
 }`
 	ctx := parseGoSource(t, src)
 	ctx.Params["max_lines"] = "2" // very low threshold
-	r := &rules.NoLargeFunctions{}
-	issues := r.Check(ctx)
+	issues := rules.NoLargeFunctions.Check(ctx)
 	if len(issues) == 0 {
 		t.Error("expected issue with max_lines=2")
 	}
@@ -102,8 +99,7 @@ func Small() {
 
 func TestNoLargeFunctions_ReportsLineNumber(t *testing.T) {
 	ctx := parseGoFile(t, fixture("large_function.go"))
-	r := &rules.NoLargeFunctions{}
-	issues := r.Check(ctx)
+	issues := rules.NoLargeFunctions.Check(ctx)
 	if len(issues) == 0 {
 		t.Fatal("expected issues")
 	}
@@ -121,8 +117,7 @@ type S struct{}
 func (s S) Big() {
 ` + strings.Repeat("\t_ = 1\n", 41) + `}`
 	ctx := parseGoSource(t, src)
-	r := &rules.NoLargeFunctions{}
-	issues := r.Check(ctx)
+	issues := rules.NoLargeFunctions.Check(ctx)
 	if len(issues) == 0 {
 		t.Error("expected issue for large method")
 	}
@@ -132,8 +127,7 @@ func (s S) Big() {
 
 func TestNamingConventions_Underscore(t *testing.T) {
 	ctx := parseGoFile(t, fixture("bad_names.go"))
-	r := &rules.NamingConventions{}
-	issues := r.Check(ctx)
+	issues := rules.NamingConventions.Check(ctx)
 	// Expect at least Get_Value (underscore) and MAXSIZE (ALL_CAPS)
 	if len(issues) < 2 {
 		t.Errorf("expected ≥2 naming issues, got %d", len(issues))
@@ -142,8 +136,7 @@ func TestNamingConventions_Underscore(t *testing.T) {
 
 func TestNamingConventions_Clean(t *testing.T) {
 	ctx := parseGoFile(t, fixture("clean.go"))
-	r := &rules.NamingConventions{}
-	issues := r.Check(ctx)
+	issues := rules.NamingConventions.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("expected no naming issues in clean file, got %v", issues)
 	}
@@ -156,8 +149,7 @@ func HTTPClient() {}
 func ParseURL() string { return "" }
 `
 	ctx := parseGoSource(t, src)
-	r := &rules.NamingConventions{}
-	issues := r.Check(ctx)
+	issues := rules.NamingConventions.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("expected no issues for valid MixedCaps names, got %d", len(issues))
 	}
@@ -168,8 +160,7 @@ func TestNamingConventions_UnderscoreReportsName(t *testing.T) {
 func Get_Value() int { return 0 }
 `
 	ctx := parseGoSource(t, src)
-	r := &rules.NamingConventions{}
-	issues := r.Check(ctx)
+	issues := rules.NamingConventions.Check(ctx)
 	if len(issues) == 0 {
 		t.Fatal("expected issue")
 	}
@@ -182,8 +173,7 @@ func Get_Value() int { return 0 }
 
 func TestNoNakedReturns_Detects(t *testing.T) {
 	ctx := parseGoFile(t, fixture("naked_returns.go"))
-	r := &rules.NoNakedReturns{}
-	issues := r.Check(ctx)
+	issues := rules.NoNakedReturns.Check(ctx)
 	if len(issues) == 0 {
 		t.Error("expected naked return issue in naked_returns.go")
 	}
@@ -197,8 +187,7 @@ func short() (result int) {
 }
 `
 	ctx := parseGoSource(t, src)
-	r := &rules.NoNakedReturns{}
-	issues := r.Check(ctx)
+	issues := rules.NoNakedReturns.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("short function naked return should not be flagged, got %d issues", len(issues))
 	}
@@ -218,8 +207,7 @@ func long() (result int, err error) {
 }
 `
 	ctx := parseGoSource(t, src)
-	r := &rules.NoNakedReturns{}
-	issues := r.Check(ctx)
+	issues := rules.NoNakedReturns.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("explicit return should not be flagged, got %d issues", len(issues))
 	}
@@ -238,8 +226,7 @@ func noNamed() int {
 }
 `
 	ctx := parseGoSource(t, src)
-	r := &rules.NoNakedReturns{}
-	issues := r.Check(ctx)
+	issues := rules.NoNakedReturns.Check(ctx)
 	if len(issues) != 0 {
 		t.Errorf("no named returns — should not flag, got %d issues", len(issues))
 	}

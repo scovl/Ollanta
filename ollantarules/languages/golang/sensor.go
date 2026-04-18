@@ -45,7 +45,7 @@ func (s *GoSensor) Analyze(path string, source []byte, activeRules map[string]bo
 	)
 
 	for _, a := range analyzers {
-		if activeRules != nil && !activeRules[a.Key()] {
+		if activeRules != nil && !activeRules[a.Meta.Key] {
 			continue
 		}
 		a := a
