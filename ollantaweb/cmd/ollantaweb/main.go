@@ -55,6 +55,7 @@ func main() {
 	gateRepo := postgres.NewGateRepository(db)
 	periodRepo := postgres.NewNewCodePeriodRepository(db)
 	webhookRepo := postgres.NewWebhookRepository(db)
+	changelogRepo := postgres.NewChangelogRepository(db)
 
 	// ── Search backend ─────────────────────────────────────────────────────
 	zincCfg := search.ZincConfig{
@@ -103,14 +104,28 @@ func main() {
 	pipeline := ingest.NewPipeline(db, projectRepo, scanRepo, issueRepo, measureRepo, indexer, enqueuer)
 
 	// ── HTTP server ────────────────────────────────────────────────────────
-	router := api.NewRouter(
-		cfg,
-		projectRepo, scanRepo, issueRepo, measureRepo,
-		userRepo, groupRepo, tokenRepo, sessionRepo, permRepo,
-		searcher, indexer, pipeline,
-		profileRepo, gateRepo, periodRepo, webhookRepo, wdispatcher,
-		metricsReg,
-	)
+	router := api.NewRouter(&api.RouterDeps{
+		Config:     cfg,
+		Projects:   projectRepo,
+		Scans:      scanRepo,
+		Issues:     issueRepo,
+		Measures:   measureRepo,
+		Users:      userRepo,
+		Groups:     groupRepo,
+		Tokens:     tokenRepo,
+		Sessions:   sessionRepo,
+		Perms:      permRepo,
+		Searcher:   searcher,
+		Indexer:    indexer,
+		Pipeline:   pipeline,
+		Profiles:   profileRepo,
+		Gates:      gateRepo,
+		Periods:    periodRepo,
+		Webhooks:   webhookRepo,
+		Dispatcher: wdispatcher,
+		MetricsReg: metricsReg,
+		Changelog:  changelogRepo,
+	})
 
 	srv := &http.Server{
 		Addr:         cfg.Addr,

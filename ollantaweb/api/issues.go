@@ -11,8 +11,9 @@ import (
 
 // IssuesHandler handles issue-related endpoints.
 type IssuesHandler struct {
-	issues   *postgres.IssueRepository
-	projects *postgres.ProjectRepository
+	issues    *postgres.IssueRepository
+	projects  *postgres.ProjectRepository
+	changelog *postgres.ChangelogRepository
 }
 
 // List handles GET /api/v1/issues with optional filter query params.
@@ -56,6 +57,9 @@ func (h *IssuesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("file"); v != "" {
 		f.FilePath = &v
+	}
+	if v := q.Get("engine_id"); v != "" {
+		f.EngineID = &v
 	}
 
 	issues, total, err := h.issues.Query(r.Context(), f)
@@ -144,5 +148,61 @@ func (h *IssuesHandler) Transition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Record changelog entries for the transition (SonarQube-style audit trail).
+	if h.changelog != nil {
+		var entries []postgres.ChangelogEntry
+		entries = append(entries, postgres.ChangelogEntry{
+			IssueID:  id,
+			UserID:   userID,
+			Field:    "status",
+			OldValue: "", // unknown from here; the DB has the old value
+			NewValue: toStatus,
+		})
+		if req.Resolution != "" {
+			entries = append(entries, postgres.ChangelogEntry{
+				IssueID:  id,
+				UserID:   userID,
+				Field:    "resolution",
+				OldValue: "",
+				NewValue: req.Resolution,
+			})
+		}
+		if req.Comment != "" {
+			entries = append(entries, postgres.ChangelogEntry{
+				IssueID:  id,
+				UserID:   userID,
+				Field:    "comment",
+				NewValue: req.Comment,
+			})
+		}
+		_ = h.changelog.InsertBatch(r.Context(), entries) // best-effort
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Changelog handles GET /api/v1/issues/{id}/changelog.
+// Returns the complete change history for an issue, most recent first.
+// Inspired by SonarQube's api/issues/changelog.
+func (h *IssuesHandler) Changelog(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid issue id")
+		return
+	}
+
+	if h.changelog == nil {
+		jsonOK(w, http.StatusOK, map[string]interface{}{"items": []struct{}{}})
+		return
+	}
+
+	entries, err := h.changelog.ListByIssue(r.Context(), id)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if entries == nil {
+		entries = []postgres.ChangelogEntry{}
+	}
+	jsonOK(w, http.StatusOK, map[string]interface{}{"items": entries})
 }

@@ -225,4 +225,4 @@ Each scan is compared against a previous baseline to classify issues as **new**,
 
 ## License
 
-MIT
+Apache-2.0 — see [LICENSE](LICENSE).
