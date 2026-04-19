@@ -26,13 +26,49 @@ export interface Issue {
   rule_key: string;
   component_path: string;
   line: number;
+  column: number;
   end_line: number;
-  severity: Severity;
-  type: IssueType;
+  end_column: number;
   message: string;
+  type: IssueType;
+  severity: Severity;
   status: string;
-  hash: string;
+  engine_id: string;
+  line_hash: string;
+  tags: string[];
+  secondary_locations: SecondaryLocation[];
+}
+
+export interface SecondaryLocation {
+  file_path: string;
+  message: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
 }
 
 export type Severity = "blocker" | "critical" | "major" | "minor" | "info";
-export type IssueType = "BUG" | "CODE_SMELL" | "VULNERABILITY";
+export type IssueType = "bug" | "code_smell" | "vulnerability" | "security_hotspot";
+
+/** Computed quality gate result */
+export interface GateResult {
+  status: "passed" | "failed";
+  conditions: GateCondition[];
+}
+
+export interface GateCondition {
+  metric: string;
+  operator: string;
+  threshold: number;
+  value: number;
+  passed: boolean;
+}
+
+/** Issues grouped by file */
+export interface FileGroup {
+  path: string;
+  shortPath: string;
+  issues: Issue[];
+  expanded: boolean;
+}

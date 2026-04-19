@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Scanner modules (CGO required for go-tree-sitter) ──────────────
+  test-scanner:
+    name: Test scanner modules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Build scanner modules
+        env:
+          CGO_ENABLED: "1"
+        run: go build ./ollantacore/... ./ollantaparser/... ./ollantarules/... ./ollantascanner/... ./ollantaengine/...
+
+      - name: Test scanner modules
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 ./ollantacore/... ./ollantaparser/... ./ollantarules/... ./ollantascanner/... ./ollantaengine/...
+
+  # ── Web / API modules (pure Go, no CGO) ────────────────────────────
+  test-web:
+    name: Test web modules
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ollanta
+          POSTGRES_PASSWORD: ollanta
+          POSTGRES_DB: ollanta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ollanta"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Build web modules
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build ./ollantaweb/...
+          go build ./ollantastore/...
+          go build ./domain/...
+          go build ./application/...
+
+      - name: Test web modules
+        env:
+          CGO_ENABLED: "0"
+          DATABASE_URL: "postgres://ollanta:ollanta@localhost:5432/ollanta?sslmode=disable"
+        run: |
+          go test -race -count=1 ./ollantaweb/...
+          go test -race -count=1 ./ollantastore/...
+          go test -race -count=1 ./domain/...
+          go test -race -count=1 ./application/...
+
+  # ── Adapter module (CGO for tree-sitter + DB) ──────────────────────
+  test-adapter:
+    name: Test adapter module
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ollanta
+          POSTGRES_PASSWORD: ollanta
+          POSTGRES_DB: ollanta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ollanta"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Test adapter module
+        env:
+          CGO_ENABLED: "1"
+          DATABASE_URL: "postgres://ollanta:ollanta@localhost:5432/ollanta?sslmode=disable"
+        run: go test -race -count=1 ./adapter/...
+
+  # ── Lint ────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
+          working-directory: ollantacore
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
+          working-directory: ollantaparser
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
+          working-directory: ollantarules
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
+          working-directory: ollantascanner
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout 5m
+          working-directory: ollantaengine
+
+  # ── Docker build smoke test ─────────────────────────────────────────
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build scanner image
+        run: docker build -t ollanta-scanner:ci .
+
+      - name: Build web image
+        run: docker build -t ollanta-web:ci ./ollantaweb

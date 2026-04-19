@@ -7,35 +7,115 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
   <header>
     <div class="header-inner">
-      <div class="logo">🔍 Ollanta</div>
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Ollanta
+      </div>
       <div class="header-meta">
         <span id="project-key" class="project-key"></span>
+        <span class="sep">/</span>
+        <span id="scan-version"></span>
         <span class="sep">·</span>
         <span id="scan-date"></span>
         <span class="sep">·</span>
-        <span id="scan-version"></span>
-        <span class="sep">·</span>
-        <span id="elapsed"></span>
+        <span id="elapsed" class="text-muted"></span>
+      </div>
+      <div class="header-right">
+        <kbd class="kbd-hint">j/k</kbd> navigate
+        <kbd class="kbd-hint">Esc</kbd> close
       </div>
     </div>
   </header>
 
   <main id="app">
-    <!-- Measures -->
-    <section class="section">
-      <h2>Overview</h2>
-      <div id="measures" class="measures-grid"></div>
-      <div id="by-lang" class="by-lang"></div>
+    <!-- ── Quality Gate Hero ──────────────────────────────────────────── -->
+    <section id="gate-hero" class="gate-hero gate-loading">
+      <div class="gate-badge">
+        <span id="gate-icon" class="gate-icon"></span>
+        <div class="gate-text">
+          <span class="gate-label">Quality Gate</span>
+          <span id="gate-status" class="gate-status">Evaluating…</span>
+        </div>
+      </div>
+      <div id="gate-conditions" class="gate-conditions"></div>
     </section>
 
-    <!-- Issues -->
-    <section class="section">
+    <!-- ── Tabs ───────────────────────────────────────────────────────── -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="issues">
+        Issues <span id="tab-issue-count" class="tab-badge">0</span>
+      </button>
+      <button class="tab" data-tab="files">
+        Files <span id="tab-file-count" class="tab-badge">0</span>
+      </button>
+    </nav>
+
+    <!-- ── Overview Tab ───────────────────────────────────────────────── -->
+    <div id="panel-overview" class="panel">
+      <!-- Measures -->
+      <div class="measures-row">
+        <div id="card-bugs" class="metric-card">
+          <span class="metric-value" id="m-bugs">0</span>
+          <span class="metric-label">Bugs</span>
+        </div>
+        <div id="card-vulns" class="metric-card">
+          <span class="metric-value" id="m-vulns">0</span>
+          <span class="metric-label">Vulnerabilities</span>
+        </div>
+        <div id="card-smells" class="metric-card">
+          <span class="metric-value" id="m-smells">0</span>
+          <span class="metric-label">Code Smells</span>
+        </div>
+        <div id="card-ncloc" class="metric-card">
+          <span class="metric-value" id="m-ncloc">0</span>
+          <span class="metric-label">Lines of Code</span>
+        </div>
+        <div id="card-files" class="metric-card">
+          <span class="metric-value" id="m-files">0</span>
+          <span class="metric-label">Files</span>
+        </div>
+        <div id="card-comments" class="metric-card">
+          <span class="metric-value" id="m-comments">0</span>
+          <span class="metric-label">Comment Lines</span>
+        </div>
+      </div>
+
+      <!-- Severity distribution -->
+      <div class="overview-grid">
+        <div class="overview-card">
+          <h3>Severity Distribution</h3>
+          <div id="sev-bars" class="sev-bars"></div>
+          <div id="sev-proportional" class="sev-proportional"></div>
+        </div>
+
+        <div class="overview-card">
+          <h3>Issue Types</h3>
+          <div id="type-bars" class="sev-bars"></div>
+        </div>
+      </div>
+
+      <!-- Hotspot files + Languages -->
+      <div class="overview-grid">
+        <div class="overview-card">
+          <h3>Hotspot Files</h3>
+          <div id="hotspot-files" class="hotspot-list"></div>
+        </div>
+        <div class="overview-card">
+          <h3>Languages</h3>
+          <div id="by-lang" class="lang-bars"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Issues Tab ─────────────────────────────────────────────────── -->
+    <div id="panel-issues" class="panel hidden">
       <div class="toolbar">
-        <h2>Issues <span id="issue-count" class="count-badge"></span></h2>
-        <div class="filters">
-          <input id="search" type="search" placeholder="Search file, message, rule…" />
+        <div class="toolbar-left">
+          <input id="search" type="search" placeholder="Search file, message, rule…" autocomplete="off" />
           <select id="filter-severity">
             <option value="all">All severities</option>
             <option value="blocker">Blocker</option>
@@ -54,27 +134,36 @@
             <option value="all">All rules</option>
           </select>
         </div>
+        <div class="toolbar-right">
+          <span id="issue-count" class="result-count"></span>
+        </div>
       </div>
 
-      <div id="sev-bar" class="sev-bar"></div>
+      <!-- Severity chips -->
+      <div id="sev-chips" class="sev-chips"></div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th data-sort="severity" class="sort-asc">Severity</th>
-              <th data-sort="type">Type</th>
-              <th data-sort="rule_key">Rule</th>
-              <th data-sort="component_path">File</th>
-              <th data-sort="message">Message</th>
-            </tr>
-          </thead>
-          <tbody id="issue-tbody">
-            <tr><td colspan="5" class="empty">Loading…</td></tr>
-          </tbody>
-        </table>
+      <!-- Issue list -->
+      <div id="issue-list" class="issue-list">
+        <div class="empty-state">Loading…</div>
       </div>
-    </section>
+    </div>
+
+    <!-- ── Files Tab ──────────────────────────────────────────────────── -->
+    <div id="panel-files" class="panel hidden">
+      <div id="file-tree" class="file-tree">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ── Issue Detail Panel (slide-out) ─────────────────────────────── -->
+    <aside id="detail-panel" class="detail-panel">
+      <div class="detail-header">
+        <h3 id="detail-title">Issue Details</h3>
+        <button id="detail-close" class="detail-close" aria-label="Close">×</button>
+      </div>
+      <div id="detail-body" class="detail-body"></div>
+    </aside>
+    <div id="detail-overlay" class="detail-overlay"></div>
   </main>
 
   <script src="app.js"></script>
