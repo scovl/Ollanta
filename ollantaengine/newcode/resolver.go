@@ -13,6 +13,7 @@ import (
 // Strategy is one of the five supported new code period strategies.
 type Strategy string
 
+// New code period strategies.
 const (
 	StrategyAuto             Strategy = "auto"
 	StrategyPreviousVersion  Strategy = "previous_version"

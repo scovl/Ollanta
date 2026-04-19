@@ -17,6 +17,7 @@ import (
 // defaultAuthorized are the numeric literals considered neutral and not flagged by default.
 var defaultAuthorized = map[string]bool{"0": true, "1": true, "2": true, "-1": true}
 
+// MagicNumber flags numeric literals that should be extracted into named constants.
 var MagicNumber = ollantarules.Rule{
 	MetaKey: "go:magic-number",
 	Check: func(ctx *ollantarules.AnalysisContext) []*domain.Issue {

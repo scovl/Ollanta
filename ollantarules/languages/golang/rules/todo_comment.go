@@ -15,6 +15,7 @@ import (
 // todoMarkers are the comment prefixes that indicate incomplete or deferred work.
 var todoMarkers = []string{"TODO", "FIXME", "HACK", "XXX"}
 
+// TodoComment flags TODO/FIXME/HACK/XXX comments that should be tracked in an issue tracker.
 var TodoComment = ollantarules.Rule{
 	MetaKey: "go:todo-comment",
 	Check: func(ctx *ollantarules.AnalysisContext) []*domain.Issue {
