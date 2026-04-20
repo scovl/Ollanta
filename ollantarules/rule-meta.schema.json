@@ -41,6 +41,18 @@
       "description": "Categorisation labels.",
       "items": { "type": "string" }
     },
+    "rationale": {
+      "type": "string",
+      "description": "Why this rule exists and the principle behind it."
+    },
+    "noncompliant_code": {
+      "type": "string",
+      "description": "Short example of code that violates the rule."
+    },
+    "compliant_code": {
+      "type": "string",
+      "description": "Short example of code that satisfies the rule."
+    },
     "params": {
       "type": "array",
       "description": "Configurable parameters accepted by this rule.",

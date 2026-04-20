@@ -5,5 +5,8 @@
   "language": "javascript",
   "type": "bug",
   "severity": "major",
-  "tags": ["correctness", "pitfall"]
+  "tags": ["correctness", "pitfall"],
+  "rationale": "The == and != operators perform type coercion, which leads to surprising results (e.g. 0 == '' is true, null == undefined is true). Using === and !== avoids these pitfalls by comparing both value and type.",
+  "noncompliant_code": "if (value == null) { ... }\nif (count != '0') { ... }",
+  "compliant_code": "if (value === null || value === undefined) { ... }\nif (count !== '0') { ... }"
 }

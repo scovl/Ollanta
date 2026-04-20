@@ -5,5 +5,8 @@
   "language": "python",
   "type": "bug",
   "severity": "major",
-  "tags": ["bug", "pitfall"]
+  "tags": ["bug", "pitfall"],
+  "rationale": "Default argument values in Python are evaluated once at function definition time, not at each call. If the default is a mutable object, all callers share the same instance — mutations in one call silently affect subsequent calls, leading to hard-to-diagnose bugs.",
+  "noncompliant_code": "def add_item(item, items=[]):\n    items.append(item)\n    return items\n\nadd_item('a')  # ['a']\nadd_item('b')  # ['a', 'b'] — surprise!",
+  "compliant_code": "def add_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n\nadd_item('a')  # ['a']\nadd_item('b')  # ['b'] — correct"
 }

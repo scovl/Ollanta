@@ -5,5 +5,8 @@
   "language": "python",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "correctness"]
+  "tags": ["convention", "correctness"],
+  "rationale": "None is a singleton in Python. PEP 8 mandates using 'is' / 'is not' for identity comparisons against None. Using == invokes __eq__, which can be overridden to produce surprising results or raise exceptions.",
+  "noncompliant_code": "if result == None:\n    handle_missing()\nif value != None:\n    process(value)",
+  "compliant_code": "if result is None:\n    handle_missing()\nif value is not None:\n    process(value)"
 }

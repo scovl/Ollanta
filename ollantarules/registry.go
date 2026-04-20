@@ -83,6 +83,17 @@ func (r *Registry) Rules() []*domain.Rule {
 	return out
 }
 
+// AllMeta returns a slice of RuleMeta for every registered rule.
+// The caller receives copies; mutations do not affect the registry.
+func (r *Registry) AllMeta() []*RuleMeta {
+	out := make([]*RuleMeta, len(r.rules))
+	for i := range r.rules {
+		m := r.rules[i].Meta
+		out[i] = &m
+	}
+	return out
+}
+
 // globalRegistry is the package-level registry populated by init() in rule packages.
 var globalRegistry Registry
 

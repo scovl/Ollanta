@@ -5,5 +5,8 @@
   "language": "javascript",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "debug"]
+  "tags": ["convention", "debug"],
+  "rationale": "console.log statements are useful during development but should be removed before shipping. They can leak sensitive data to browser devtools, clutter output in Node.js, and cannot be filtered by log level. Use a structured logging library instead.",
+  "noncompliant_code": "function fetchUser(id) {\n  console.log('fetching user', id);\n  return api.get(`/users/${id}`);\n}",
+  "compliant_code": "function fetchUser(id) {\n  logger.debug('fetching user', { id });\n  return api.get(`/users/${id}`);\n}"
 }

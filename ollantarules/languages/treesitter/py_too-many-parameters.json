@@ -6,6 +6,9 @@
   "type": "code_smell",
   "severity": "major",
   "tags": ["design", "readability"],
+  "rationale": "Long parameter lists are hard to remember and easy to misorder. In Python, consider using dataclasses, typed dicts, or keyword-only arguments to group related parameters and make the function signature self-documenting.",
+  "noncompliant_code": "def create_user(name, email, phone, address, city, zip_code, role):\n    ...",
+  "compliant_code": "@dataclass\nclass UserRequest:\n    name: str\n    email: str\n    phone: str\n    address: Address\n    role: str\n\ndef create_user(req: UserRequest):\n    ...",
   "params": [
     {"key": "max_params", "description": "Maximum allowed parameter count (excluding self/cls)", "default_value": "5", "type": "int"}
   ]

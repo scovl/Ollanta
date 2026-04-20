@@ -5,5 +5,8 @@
   "language": "go",
   "type": "code_smell",
   "severity": "info",
-  "tags": ["convention"]
+  "tags": ["convention"],
+  "rationale": "TODO and FIXME comments are often forgotten and accumulate technical debt. Tracking them as issues ensures they are visible, prioritised, and eventually resolved rather than rotting in the codebase.",
+  "noncompliant_code": "func Process(data []byte) error {\n    // TODO: add input validation\n    // FIXME: this crashes on empty input\n    return handle(data)\n}",
+  "compliant_code": "func Process(data []byte) error {\n    if len(data) == 0 {\n        return ErrEmptyInput\n    }\n    if err := validate(data); err != nil {\n        return fmt.Errorf(\"invalid input: %w\", err)\n    }\n    return handle(data)\n}"
 }

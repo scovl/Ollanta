@@ -6,6 +6,9 @@
   "type": "bug",
   "severity": "critical",
   "tags": ["correctness", "readability"],
+  "rationale": "Naked returns implicitly use named return values, which makes it easy to accidentally return stale or unintended values — especially in long functions where the assignment may be far from the return statement. Explicit returns make the data flow clear.",
+  "noncompliant_code": "func divide(a, b float64) (result float64, err error) {\n    if b == 0 {\n        err = errors.New(\"division by zero\")\n        return // naked return — unclear what 'result' is\n    }\n    result = a / b\n    return // naked return\n}",
+  "compliant_code": "func divide(a, b float64) (float64, error) {\n    if b == 0 {\n        return 0, errors.New(\"division by zero\")\n    }\n    return a / b, nil\n}",
   "params": [
     {"key": "min_lines", "description": "Minimum function length to flag naked returns", "default_value": "5", "type": "int"}
   ]

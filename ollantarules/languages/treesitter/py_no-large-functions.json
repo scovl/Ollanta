@@ -6,6 +6,9 @@
   "type": "code_smell",
   "severity": "major",
   "tags": ["size", "complexity"],
+  "rationale": "Large functions do too much. The Zen of Python states 'Flat is better than nested' and 'Simple is better than complex'. Breaking long functions into smaller ones with descriptive names acts as self-documentation and simplifies testing.",
+  "noncompliant_code": "def process_report(data):\n    # 50+ lines of parsing, transforming,\n    # validating, formatting, and writing\n    # all in one function",
+  "compliant_code": "def process_report(data):\n    parsed = parse_input(data)\n    validated = validate_entries(parsed)\n    formatted = format_report(validated)\n    write_output(formatted)",
   "params": [
     {"key": "max_lines", "description": "Maximum allowed lines per function", "default_value": "40", "type": "int"}
   ]

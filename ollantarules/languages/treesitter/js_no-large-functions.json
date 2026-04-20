@@ -6,6 +6,9 @@
   "type": "code_smell",
   "severity": "major",
   "tags": ["size", "complexity"],
+  "rationale": "Large functions try to do too much. Breaking them into smaller, focused functions makes the code easier to understand, test in isolation, and reuse across the codebase.",
+  "noncompliant_code": "function handleSubmit(form) {\n  // 60+ lines of validation, API calls,\n  // DOM updates, error handling, and analytics\n  // all interleaved in one function\n}",
+  "compliant_code": "function handleSubmit(form) {\n  const data = validateForm(form);\n  const result = await submitToAPI(data);\n  updateUI(result);\n  trackEvent('form_submitted');\n}",
   "params": [
     {"key": "max_lines", "description": "Maximum allowed lines per function", "default_value": "40", "type": "int"}
   ]

@@ -28,6 +28,12 @@ type RuleMeta struct {
 	Type domain.IssueType `json:"type"`
 	// DefaultSeverity is the default severity for issues found by this rule.
 	DefaultSeverity domain.Severity `json:"severity"`
+	// Rationale explains why this rule exists and the principle behind it.
+	Rationale string `json:"rationale,omitempty"`
+	// NoncompliantCode is a short example of code that violates the rule.
+	NoncompliantCode string `json:"noncompliant_code,omitempty"`
+	// CompliantCode is a short example of code that satisfies the rule.
+	CompliantCode string `json:"compliant_code,omitempty"`
 	// Tags are categorisation labels.
 	Tags []string `json:"tags,omitempty"`
 	// Params is the list of configurable parameters with defaults.

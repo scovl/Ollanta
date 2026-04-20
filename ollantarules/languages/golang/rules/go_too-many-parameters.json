@@ -6,6 +6,9 @@
   "type": "code_smell",
   "severity": "major",
   "tags": ["design", "readability"],
+  "rationale": "Long parameter lists make function calls error-prone — callers must remember the exact order and meaning of each argument. Grouping related parameters into a struct or options pattern improves readability and makes the API easier to evolve.",
+  "noncompliant_code": "func CreateUser(name, email, phone, address, city, country string, age int) error {\n    // ...\n}",
+  "compliant_code": "type CreateUserRequest struct {\n    Name    string\n    Email   string\n    Phone   string\n    Address Address\n    Age     int\n}\n\nfunc CreateUser(req CreateUserRequest) error {\n    // ...\n}",
   "params": [
     {"key": "max_params", "description": "Maximum allowed parameter count", "default_value": "5", "type": "int"}
   ]
