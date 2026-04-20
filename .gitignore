@@ -28,4 +28,7 @@ ollantascanner/server/static/node_modules/
 # dist/app.js is a pre-built bundle committed alongside source; do not ignore it
 
 
+# presentation
+presentation/
+
 
