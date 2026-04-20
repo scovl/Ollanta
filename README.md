@@ -1,10 +1,14 @@
-# Ollanta
+<p align="center">
+  <img src="docs/imgs/logo-dark.png" alt="Ollanta logo" width="420">
+</p>
 
-![ollanta01](https://raw.githubusercontent.com/scovl/Ollanta/refs/heads/main/docs/imgs/o01.png)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/scovl/Ollanta/refs/heads/main/docs/imgs/o01.png" alt="Ollanta screenshot">
+</p>
 
-Ollanta is a multi-language static analysis platform written in Go. It analyses source code, reports quality issues, computes code metrics, and evaluates configurable quality gates — making it easy to enforce coding standards in any CI/CD pipeline.
+Ollanta is a multi-language static analysis platform written in Go. It analyzes source code, reports quality issues, computes code metrics, and evaluates configurable quality gates so teams can enforce coding standards locally, in CI, and in centralized review workflows.
 
-Inspired by [OpenStaticAnalyzer](https://github.com/sed-inf-u-szeged/OpenStaticAnalyzer), Ollanta is designed as a modular where each concern lives in its own Go module.
+Inspired by [OpenStaticAnalyzer](https://github.com/sed-inf-u-szeged/OpenStaticAnalyzer), [Semgrep](https://semgrep.dev/), [SonarQube](https://www.sonarqube.org/), Ollanta is organized as a modular platform where each concern lives in its own Go module.
 
 ---
 
@@ -21,6 +25,40 @@ Inspired by [OpenStaticAnalyzer](https://github.com/sed-inf-u-szeged/OpenStaticA
 ## Architecture
 
 Ollanta follows a **hexagonal (ports & adapters)** layout — inner modules have no external dependencies; adapters plug in at the edges. See [docs/architecture.md](docs/architecture.md) for the full module layout.
+
+For contributor workflow, validation commands, and repository conventions, see [CONTRIBUTIONS.md](CONTRIBUTIONS.md) and [docs/contributing.md](docs/contributing.md).
+
+---
+
+## Quick Start
+
+### Local scanner UI
+
+```sh
+ollanta \
+  -project-dir . \
+  -project-key my-project \
+  -format all \
+  -serve
+```
+
+This runs a local scan and opens the embedded web UI at `http://localhost:7777`.
+
+### Docker scanner UI
+
+```sh
+docker compose up serve
+```
+
+This builds the scanner image, scans the mounted project directory, and serves the embedded UI on port `7777`.
+
+### Centralized server stack
+
+```sh
+docker compose --profile server up -d
+```
+
+This starts PostgreSQL, ZincSearch, and `ollantaweb` on port `8080`.
 
 ---
 
@@ -77,6 +115,61 @@ ollanta \
 
 Opens a local web UI at `http://localhost:7777` with the scan results.
 
+### Fix with AI in the local UI
+
+The local scanner UI now includes a `Fix with AI` tab inside each issue detail. The flow is:
+
+1. Open an issue in the local UI on port `7777`
+2. Choose a configured AI agent
+3. Generate a fix preview for the affected snippet
+4. Review the diff
+5. Apply the change directly to your local file
+
+Agent configuration is local to the scanner process. The simplest setup is OpenAI-compatible:
+
+```sh
+export OPENAI_API_KEY=your_api_key
+export OLLANTA_AI_OPENAI_MODEL=gpt-4.1-mini
+```
+
+For multiple agents, configure `OLLANTA_AI_AGENTS` with a JSON array:
+
+```json
+[
+  {
+    "id": "openai-fast",
+    "label": "OpenAI Fast",
+    "provider": "openai",
+    "model": "gpt-4.1-mini",
+    "base_url": "https://api.openai.com/v1",
+    "api_key_env": "OPENAI_API_KEY"
+  },
+  {
+    "id": "openai-strong",
+    "label": "OpenAI Strong",
+    "provider": "openai",
+    "model": "gpt-4.1",
+    "base_url": "https://api.openai.com/v1",
+    "api_key_env": "OPENAI_API_KEY"
+  }
+]
+```
+
+For local development without an external provider, enable the built-in mock agent:
+
+```sh
+export OLLANTA_AI_ENABLE_MOCK=1
+```
+
+The local UI only applies a fix after explicit confirmation. If the target file changed after preview generation, Ollanta rejects the apply action and asks for a new preview.
+
+If you run the scanner through Docker Compose, export the AI-related environment variables before recreating `serve` so they are available to the scanner process inside the container.
+
+```sh
+export OLLANTA_AI_ENABLE_MOCK=1
+docker compose up -d --build --force-recreate serve
+```
+
 ### Push results to a centralized server
 
 ```sh
@@ -130,6 +223,16 @@ PROJECT_DIR=/path/to/myapp PROJECT_KEY=myapp docker compose up serve
 docker compose run --rm scan-only
 ```
 
+If you changed the scanner frontend under `ollantascanner/server/static`, rebuild the frontend bundle first and then recreate `serve`:
+
+```sh
+cd ollantascanner/server/static
+npm run build
+
+cd ../../..
+docker compose up -d --build --force-recreate serve
+```
+
 ### Centralized server stack
 
 Start PostgreSQL, ZincSearch, and the ollantaweb API server:
@@ -162,6 +265,14 @@ OLLANTA_SERVER=http://your-server:8080 docker compose --profile push run --rm pu
 | `ZINC_PASSWORD`       | `ollanta_dev`            | ZincSearch admin password |
 | `OLLANTA_SEARCH_BACKEND` | `zincsearch`          | Search backend (`zincsearch` or `postgres`) |
 | `OLLANTA_SERVER`      | `http://ollantaweb:8080` | API server URL (for push mode) |
+| `OLLANTA_TOKEN`       | `ollanta-dev-scanner-token` | Scanner token used by `push` |
+| `OLLANTA_SCANNER_TOKEN` | `ollanta-dev-scanner-token` | Shared secret accepted by `ollantaweb` |
+| `OLLANTA_AI_ENABLE_MOCK` | *(empty)*             | Enables the built-in mock AI agent in the local scanner UI |
+| `OLLANTA_AI_AGENTS`   | *(empty)*                | JSON array describing configured local AI agents |
+| `OLLANTA_AI_OPENAI_MODEL` | *(empty)*            | Default OpenAI-compatible model for simple setups |
+| `OLLANTA_AI_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Base URL for OpenAI-compatible APIs |
+| `OLLANTA_AI_OPENAI_LABEL` | `OpenAI`             | Display label shown in the local UI |
+| `OPENAI_API_KEY`      | *(empty)*                | API key used by OpenAI-compatible agents |
 
 ---
 
@@ -212,12 +323,6 @@ Three mechanisms: local (JWT), OAuth (GitHub, GitLab, Google), and API tokens (`
 ## Webhooks
 
 Projects can register outbound webhooks that fire on scan events, with HMAC-SHA256 signature verification and automatic retry. See [docs/webhooks.md](docs/webhooks.md).
-
-## Server API
-
-Full REST API reference (50+ endpoints) at [docs/api.md](docs/api.md).
-
----
 
 ## Issue Tracking
 

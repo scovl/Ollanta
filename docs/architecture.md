@@ -62,6 +62,8 @@ graph LR
 
 **The Scanner** analyzes your source code locally and produces a report with all found issues. It can run standalone in the terminal, generate a JSON/SARIF file, or open a local web UI to browse results.
 
+The local scanner UI is embedded into the scanner binary. It serves an interactive report viewer on port `7777`, including rule details and the local `Fix with AI` workflow for previewing and applying edits to files in the scanned project.
+
 **The Server** receives reports from multiple projects, stores scan history, tracks how issues evolve over time, and evaluates quality gates.
 
 ### Usage modes in practice
@@ -69,6 +71,7 @@ graph LR
 | Scenario | Command | What happens |
 |----------|---------|--------------|
 | "I want to see my code's issues right now" | `ollanta -project-dir . -serve` | Scanner runs, opens local UI on port 7777 |
+| "I want AI-assisted local remediation" | `OLLANTA_AI_ENABLE_MOCK=1 ollanta -project-dir . -serve` | Scanner opens the local UI with a mock AI agent enabled |
 | "I need a report for CI" | `ollanta -project-dir . -format sarif` | Scanner writes `.ollanta/report.sarif` |
 | "I want centralized history" | `ollanta -project-dir . -server http://host:8080` | Scanner sends report to the server |
 | "I want to query results via API" | `curl http://host:8080/api/v1/issues` | Server exposes data via REST |

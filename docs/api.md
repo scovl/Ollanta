@@ -1,6 +1,11 @@
 # Server API Reference
 
-All `/api/v1` routes (except auth) require a `Bearer` token or an API token (`olt_…`) in the `Authorization` header.
+All `/api/v1` routes (except auth) require authentication.
+
+- Most routes expect a `Bearer` token or an API token (`olt_…`) in the `Authorization` header
+- `POST /api/v1/scans` also accepts the shared scanner token configured through `OLLANTA_SCANNER_TOKEN`
+
+This document covers the centralized `ollantaweb` API. The scanner-local UI on port `7777` has its own embedded endpoints for browser use, such as rule lookup and local `Fix with AI` preview/apply actions.
 
 The server listens on `:8080` by default. Start it with:
 
@@ -44,6 +49,19 @@ docker compose --profile server up -d
 | GET    | `/api/v1/projects/{key}/measures/trend`   | Metric trend over time |
 | GET    | `/api/v1/search`                          | Full-text search (ZincSearch / Postgres FTS) |
 | POST   | `/admin/reindex`                          | Rebuild search indexes from PostgreSQL |
+
+### Scanner ingestion authentication
+
+The scanner push workflow can authenticate without a user account by sharing a pre-configured scanner secret:
+
+```sh
+export OLLANTA_SCANNER_TOKEN=ollanta-dev-scanner-token
+export OLLANTA_TOKEN=ollanta-dev-scanner-token
+docker compose --profile server up -d
+docker compose --profile push run --rm push
+```
+
+If `OLLANTA_SCANNER_TOKEN` is empty on the server, ingestion falls back to regular token-based authentication.
 
 ## Users, Groups & Permissions
 
