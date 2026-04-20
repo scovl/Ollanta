@@ -179,6 +179,13 @@ func (r *UserRepository) Deactivate(ctx context.Context, id int64) error {
 	return err
 }
 
+// Reactivate sets is_active=true for a previously deactivated user.
+func (r *UserRepository) Reactivate(ctx context.Context, id int64) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE users SET is_active=TRUE, updated_at=now() WHERE id=$1`, id)
+	return err
+}
+
 // SetLastLogin updates last_login_at to now for a user.
 func (r *UserRepository) SetLastLogin(ctx context.Context, id int64) error {
 	_, err := r.db.Pool.Exec(ctx,

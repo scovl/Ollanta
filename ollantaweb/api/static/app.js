@@ -359,7 +359,7 @@ function renderOverviewTab() {
   const nc = o.new_code || {};
 
   // Gate hero
-  const gateHeroHtml = renderGateHero(gate);
+  const gateHeroHtml = renderGateHero(gate, m);
 
   // Metric cards
   const bugs = m.bugs || 0;
@@ -447,7 +447,8 @@ function renderOverviewTab() {
   return gateHeroHtml + newCodeHtml + metricsHtml + sevDistHtml + typeDistHtml + hotspotHtml + scanInfoHtml;
 }
 
-function renderGateHero(gate) {
+function renderGateHero(gate, measures) {
+  measures = measures || {};
   if (!gate || !gate.status || gate.status === 'NONE') {
     return `<div class="gate-hero gate-loading">
       <div class="gate-badge">
@@ -465,12 +466,35 @@ function renderGateHero(gate) {
   const icon = s === 'OK' ? '\u2713' : s === 'WARN' ? '!' : '\u2717';
   const text = s === 'OK' ? 'Passed' : s === 'WARN' ? 'Warning' : 'Failed';
 
-  const conds = (gate.conditions || []).map(c => {
-    return `<div class="gate-cond">
-      <span class="gate-cond-metric">${escHtml(c.metric)}</span>
-      <span class="gate-cond-value">${escHtml(c.operator)} ${c.threshold}</span>
-    </div>`;
-  }).join('');
+  let reasonsHtml = '';
+  if (s !== 'OK') {
+    const metricMessages = {
+      bugs:                    v => `${v} bug${v !== 1 ? 's' : ''} found`,
+      vulnerabilities:         v => `${v} vulnerability${v !== 1 ? 'ies' : 'y'} found`,
+      new_bugs:                v => `${v} new bug${v !== 1 ? 's' : ''} introduced`,
+      new_vulnerabilities:     v => `${v} new vulnerability${v !== 1 ? 'ies' : 'y'} introduced`,
+      code_smells:             v => `${v} code smell${v !== 1 ? 's' : ''} detected`,
+      coverage:                v => `Code coverage is ${v}%`,
+      duplicated_lines_density:v => `Duplication at ${v}%`,
+    };
+    const reasons = (gate.conditions || []).map(c => {
+      const val = measures[c.metric];
+      const violated = val !== undefined && (
+        c.operator === 'GT'  ? val >  c.threshold :
+        c.operator === 'LT'  ? val <  c.threshold :
+        c.operator === 'GTE' ? val >= c.threshold :
+        c.operator === 'LTE' ? val <= c.threshold :
+        c.operator === 'EQ'  ? val === c.threshold :
+        val !== c.threshold
+      );
+      if (!violated) return null;
+      const fn = metricMessages[c.metric];
+      return fn ? fn(val) : null;
+    }).filter(Boolean);
+    if (reasons.length) {
+      reasonsHtml = `<ul class="gate-reasons">${reasons.map(r => `<li>${r}</li>`).join('')}</ul>`;
+    }
+  }
 
   return `<div class="gate-hero ${cls}">
     <div class="gate-badge">
@@ -480,7 +504,7 @@ function renderGateHero(gate) {
         <span class="gate-status-text">${text}</span>
       </div>
     </div>
-    ${conds ? `<div class="gate-conditions-list">${conds}</div>` : ''}
+    ${reasonsHtml}
   </div>`;
 }
 
@@ -805,7 +829,8 @@ function openIssueDetail(issue) {
         <span class="detail-prop-value">${i.tags.map(t => `<span class="tag">${escHtml(t)}</span>`).join(' ')}</span>
       </div>` : ''}
     </div>
-    ${secondaryHtml}`;
+    ${secondaryHtml}
+    <div id="rule-detail-section"><div class="loading-state" style="padding:16px 0"><div class="spinner"></div> Loading rule details\u2026</div></div>`;
 
   panel.classList.remove('hidden');
   overlay.classList.remove('hidden');
@@ -816,6 +841,35 @@ function openIssueDetail(issue) {
 
   document.getElementById('detailClose').addEventListener('click', closeIssueDetail);
   overlay.addEventListener('click', closeIssueDetail);
+
+  // Fetch rule details asynchronously
+  if (i.rule_key) {
+    apiFetch(`/rules/${encodeURIComponent(i.rule_key)}`).then(rule => {
+      const el = document.getElementById('rule-detail-section');
+      if (!el) return;
+      let html = '';
+      if (rule.rationale) {
+        html += `<div class="detail-section-title">Why is this a problem?</div>
+          <div class="rule-rationale">${escHtml(rule.rationale)}</div>`;
+      }
+      if (rule.description && rule.description !== rule.rationale) {
+        html += `<div class="detail-section-title">Description</div>
+          <div class="rule-rationale">${escHtml(rule.description)}</div>`;
+      }
+      if (rule.noncompliant_code) {
+        html += `<div class="detail-section-title">\u2718 Noncompliant Code</div>
+          <pre class="rule-code noncompliant"><code>${escHtml(rule.noncompliant_code)}</code></pre>`;
+      }
+      if (rule.compliant_code) {
+        html += `<div class="detail-section-title">\u2714 Compliant Code</div>
+          <pre class="rule-code compliant"><code>${escHtml(rule.compliant_code)}</code></pre>`;
+      }
+      el.innerHTML = html || '';
+    }).catch(() => {
+      const el = document.getElementById('rule-detail-section');
+      if (el) el.innerHTML = '';
+    });
+  }
 }
 
 function closeIssueDetail() {

@@ -1,0 +1,15 @@
+{
+  "key": "go:magic-number",
+  "name": "Magic Number",
+  "description": "Numeric literals used directly in expressions should be replaced with named constants to improve readability.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["readability", "convention"],
+  "rationale": "Magic numbers obscure the intent of code. When a numeric literal appears in an expression, future readers must guess its meaning. Named constants document the purpose and make updates safer — change the value in one place instead of hunting through the codebase.",
+  "noncompliant_code": "func calculatePrice(qty int) float64 {\n    return float64(qty) * 19.99 * 0.85\n}",
+  "compliant_code": "const (\n    unitPrice    = 19.99\n    discountRate = 0.85\n)\n\nfunc calculatePrice(qty int) float64 {\n    return float64(qty) * unitPrice * discountRate\n}",
+  "params": [
+    {"key": "authorized_numbers", "description": "Comma-separated list of allowed literal values", "default_value": "0,1,2,-1", "type": "string"}
+  ]
+}

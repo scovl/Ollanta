@@ -1,0 +1,12 @@
+{
+  "key": "py:broad-except",
+  "name": "Broad Exception Catch (Python)",
+  "description": "Catching broad exceptions like 'Exception' or 'BaseException' hides bugs. Catch specific exceptions instead.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["error-handling", "correctness"],
+  "rationale": "Catching Exception or BaseException silently swallows programming errors like TypeError, KeyError, and AttributeError. This hides real bugs and makes debugging extremely difficult. Always catch the most specific exception type you expect.",
+  "noncompliant_code": "try:\n    process(data)\nexcept Exception:\n    log.error('something went wrong')",
+  "compliant_code": "try:\n    process(data)\nexcept ValueError as e:\n    log.error('invalid data: %s', e)\nexcept IOError as e:\n    log.error('I/O failure: %s', e)"
+}

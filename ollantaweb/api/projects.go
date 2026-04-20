@@ -67,3 +67,59 @@ func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
 		"offset": offset,
 	})
 }
+
+// Update handles PUT /api/v1/projects/{key}.
+func (h *ProjectsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	key := routeParam(r, "key")
+	p, err := h.repo.GetByKey(r.Context(), key)
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var req struct {
+		Name        *string  `json:"name"`
+		Description *string  `json:"description"`
+		Tags        []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.Name != nil {
+		p.Name = *req.Name
+	}
+	if req.Description != nil {
+		p.Description = *req.Description
+	}
+	if req.Tags != nil {
+		p.Tags = req.Tags
+	}
+	if err := h.repo.Upsert(r.Context(), p); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, p)
+}
+
+// Delete handles DELETE /api/v1/projects/{key}.
+func (h *ProjectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	key := routeParam(r, "key")
+	p, err := h.repo.GetByKey(r.Context(), key)
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.repo.Delete(r.Context(), p.ID); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

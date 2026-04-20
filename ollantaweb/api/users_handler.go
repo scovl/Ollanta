@@ -176,6 +176,55 @@ func (h *UsersHandler) Deactivate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Reactivate handles POST /api/v1/users/{id}/reactivate (requires manage_users).
+func (h *UsersHandler) Reactivate(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	if err := h.users.Reactivate(r.Context(), id); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ChangePassword handles PUT /api/v1/users/me/password (self-service).
+func (h *UsersHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	u := UserFromContext(r.Context())
+	if u == nil {
+		jsonError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		jsonError(w, http.StatusBadRequest, "old_password and new_password are required")
+		return
+	}
+	if err := auth.CheckPassword(req.OldPassword, u.PasswordHash); err != nil {
+		jsonError(w, http.StatusForbidden, "old password is incorrect")
+		return
+	}
+	hash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "could not hash password")
+		return
+	}
+	if err := h.users.SetPassword(r.Context(), u.ID, hash); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ListTokens handles GET /api/v1/users/{id}/tokens (requires manage_users).
 func (h *UsersHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")

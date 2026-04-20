@@ -1,0 +1,15 @@
+{
+  "key": "js:too-many-parameters",
+  "name": "Too Many Parameters (JavaScript)",
+  "description": "Functions with too many parameters are hard to call correctly and signal a missing abstraction.",
+  "language": "javascript",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["design", "readability"],
+  "rationale": "Long parameter lists are difficult to remember and easy to misorder. In JavaScript, prefer using an options object to group related arguments — this makes calls self-documenting and allows easy addition of optional parameters.",
+  "noncompliant_code": "function createUser(name, email, phone, address, city, zip, role) {\n  // ...\n}",
+  "compliant_code": "function createUser({ name, email, phone, address, role }) {\n  // ...\n}",
+  "params": [
+    {"key": "max_params", "description": "Maximum allowed parameter count", "default_value": "5", "type": "int"}
+  ]
+}

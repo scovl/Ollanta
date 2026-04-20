@@ -1,0 +1,15 @@
+{
+  "key": "go:cognitive-complexity",
+  "name": "Cognitive Complexity",
+  "description": "Functions with high cognitive complexity are hard to understand, test and maintain.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "critical",
+  "tags": ["complexity", "readability"],
+  "rationale": "Cognitive complexity measures how difficult a function is for a human to understand. Unlike cyclomatic complexity, it penalises nested control flow more heavily, reflecting how developers actually perceive difficulty. Keeping complexity low ensures code is readable, testable, and maintainable.",
+  "noncompliant_code": "func process(data []Item) string {\n    result := \"\"\n    for _, item := range data {\n        if item.Active {\n            if item.Type == \"A\" {\n                if item.Value > 10 {\n                    result += handle(item)\n                } else {\n                    result += fallback(item)\n                }\n            }\n        }\n    }\n    return result\n}",
+  "compliant_code": "func process(data []Item) string {\n    var parts []string\n    for _, item := range data {\n        if s := processItem(item); s != \"\" {\n            parts = append(parts, s)\n        }\n    }\n    return strings.Join(parts, \"\")\n}\n\nfunc processItem(item Item) string {\n    if !item.Active || item.Type != \"A\" {\n        return \"\"\n    }\n    if item.Value > 10 {\n        return handle(item)\n    }\n    return fallback(item)\n}",
+  "params": [
+    {"key": "max_complexity", "description": "Maximum allowed cognitive complexity", "default_value": "15", "type": "int"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "key": "go:no-large-functions",
+  "name": "No Large Functions",
+  "description": "Functions exceeding the configured line limit are harder to read and maintain.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["size", "complexity"],
+  "rationale": "Large functions try to do too much, making them difficult to understand, test, and modify safely. Smaller functions with clear responsibilities lead to better-structured, more reusable code.",
+  "noncompliant_code": "func handleRequest(w http.ResponseWriter, r *http.Request) {\n    // 80+ lines of parsing, validation, business logic,\n    // database calls, error handling, and response formatting\n    // all in a single function\n}",
+  "compliant_code": "func handleRequest(w http.ResponseWriter, r *http.Request) {\n    req, err := parseRequest(r)\n    if err != nil {\n        http.Error(w, err.Error(), 400)\n        return\n    }\n    result, err := processRequest(req)\n    if err != nil {\n        http.Error(w, err.Error(), 500)\n        return\n    }\n    writeJSON(w, result)\n}",
+  "params": [
+    {"key": "max_lines", "description": "Maximum allowed lines per function", "default_value": "40", "type": "int"}
+  ]
+}

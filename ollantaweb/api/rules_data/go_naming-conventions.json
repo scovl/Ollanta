@@ -1,0 +1,12 @@
+{
+  "key": "go:naming-conventions",
+  "name": "Naming Conventions",
+  "description": "Go naming conventions: exported identifiers must use MixedCaps; underscores in names violate Effective Go guidelines.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "readability"],
+  "rationale": "Go has well-established naming conventions defined in Effective Go. Using MixedCaps instead of underscores ensures consistency with the standard library and the broader Go ecosystem, making code immediately familiar to other Go developers.",
+  "noncompliant_code": "var max_retries = 3\nfunc get_user_name(user_id int) string {\n    // ...\n}",
+  "compliant_code": "var maxRetries = 3\nfunc getUserName(userID int) string {\n    // ...\n}"
+}

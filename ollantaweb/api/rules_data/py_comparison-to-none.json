@@ -1,0 +1,12 @@
+{
+  "key": "py:comparison-to-none",
+  "name": "Comparison to None (Python)",
+  "description": "Compare to None using 'is' or 'is not', not '==' or '!='. PEP 8 / SonarQube python:S5727.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "correctness"],
+  "rationale": "None is a singleton in Python. PEP 8 mandates using 'is' / 'is not' for identity comparisons against None. Using == invokes __eq__, which can be overridden to produce surprising results or raise exceptions.",
+  "noncompliant_code": "if result == None:\n    handle_missing()\nif value != None:\n    process(value)",
+  "compliant_code": "if result is None:\n    handle_missing()\nif value is not None:\n    process(value)"
+}

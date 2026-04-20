@@ -1,0 +1,15 @@
+{
+  "key": "go:function-nesting-depth",
+  "name": "Function Nesting Depth",
+  "description": "Code nested too deeply is hard to read and maintain. Extract inner logic into separate functions.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "major",
+  "tags": ["complexity", "readability"],
+  "rationale": "Deeply nested code forces readers to mentally track many levels of context simultaneously. Flattening the structure with early returns, guard clauses, or extracted helper functions drastically improves comprehension.",
+  "noncompliant_code": "func process(items []Item) {\n    for _, item := range items {\n        if item.Valid {\n            if item.Ready {\n                for _, sub := range item.Parts {\n                    if sub.Active {\n                        handle(sub) // depth 5\n                    }\n                }\n            }\n        }\n    }\n}",
+  "compliant_code": "func process(items []Item) {\n    for _, item := range items {\n        if !item.Valid || !item.Ready {\n            continue\n        }\n        processItem(item)\n    }\n}\n\nfunc processItem(item Item) {\n    for _, sub := range item.Parts {\n        if sub.Active {\n            handle(sub)\n        }\n    }\n}",
+  "params": [
+    {"key": "max_depth", "description": "Maximum allowed nesting depth", "default_value": "4", "type": "int"}
+  ]
+}

@@ -1,0 +1,35 @@
+package api
+
+import (
+	"net/http"
+	"runtime"
+
+	"github.com/scovl/ollanta/ollantastore/postgres"
+	"github.com/scovl/ollanta/ollantaweb/config"
+)
+
+// SystemHandler exposes system information for administrators.
+type SystemHandler struct {
+	users    *postgres.UserRepository
+	projects *postgres.ProjectRepository
+	config   *config.Config
+}
+
+// Info handles GET /api/v1/system/info — returns system metadata.
+func (h *SystemHandler) Info(w http.ResponseWriter, r *http.Request) {
+	userCount, _ := h.users.Count(r.Context())
+	_, projectCount, _ := h.projects.List(r.Context(), 1, 0)
+
+	jsonOK(w, http.StatusOK, map[string]any{
+		"version":        "0.1.0",
+		"go_version":     runtime.Version(),
+		"os":             runtime.GOOS,
+		"arch":           runtime.GOARCH,
+		"num_goroutines": runtime.NumGoroutine(),
+		"search_backend": h.config.SearchBackend,
+		"stats": map[string]any{
+			"users":    userCount,
+			"projects": projectCount,
+		},
+	})
+}
