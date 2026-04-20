@@ -561,6 +561,58 @@ function openDetail(issue: Issue): void {
   el("detail-body").innerHTML = html;
   el("detail-panel").classList.add("open");
   el("detail-overlay").classList.add("open");
+
+  // Fetch and display rule details
+  fetchRuleDetail(issue.rule_key);
+}
+
+async function fetchRuleDetail(ruleKey: string): Promise<void> {
+  const container = document.getElementById("rule-detail-section");
+  if (!container) {
+    // Create container if not present
+    const body = el("detail-body");
+    const div = document.createElement("div");
+    div.id = "rule-detail-section";
+    div.innerHTML = `<div class="detail-section"><div class="detail-section-title">Loading rule details…</div></div>`;
+    body.appendChild(div);
+  }
+  try {
+    const res = await fetch(`/rules/${encodeURIComponent(ruleKey)}`);
+    if (!res.ok) throw new Error("not found");
+    const rule = await res.json();
+    const target = document.getElementById("rule-detail-section");
+    if (!target) return;
+
+    let rhtml = "";
+    if (rule.rationale) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">Why is this a problem?</div>
+        <div class="rule-rationale">${esc(rule.rationale)}</div>
+      </div>`;
+    }
+    if (rule.description && rule.description !== rule.rationale) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">Description</div>
+        <div class="rule-rationale">${esc(rule.description)}</div>
+      </div>`;
+    }
+    if (rule.noncompliant_code) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">✘ Noncompliant Code</div>
+        <pre class="rule-code noncompliant"><code>${esc(rule.noncompliant_code)}</code></pre>
+      </div>`;
+    }
+    if (rule.compliant_code) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">✔ Compliant Code</div>
+        <pre class="rule-code compliant"><code>${esc(rule.compliant_code)}</code></pre>
+      </div>`;
+    }
+    target.innerHTML = rhtml;
+  } catch {
+    const target = document.getElementById("rule-detail-section");
+    if (target) target.innerHTML = "";
+  }
 }
 
 function closeDetail(): void {

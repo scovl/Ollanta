@@ -6,14 +6,19 @@ package server
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	ollantarules "github.com/scovl/ollanta/ollantarules"
 )
 
 //go:embed static/dist
@@ -35,6 +40,32 @@ func Serve(reportPath, bind string, port int) error {
 	}
 
 	mux := http.NewServeMux()
+
+	// Build rules map from the global registry (populated by init() in language packages).
+	allMeta := ollantarules.Global().AllMeta()
+	rules := make(map[string]*ollantarules.RuleMeta, len(allMeta))
+	for _, m := range allMeta {
+		rules[m.Key] = m
+	}
+
+	mux.HandleFunc("/rules/", func(w http.ResponseWriter, r *http.Request) {
+		key, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/rules/"))
+		if key == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = fmt.Fprint(w, `{"error":"missing rule key"}`)
+			return
+		}
+		rule, ok := rules[key]
+		if !ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = fmt.Fprint(w, `{"error":"rule not found"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(rule)
+	})
 
 	// Serve the generated report JSON
 	mux.HandleFunc("/report.json", func(w http.ResponseWriter, r *http.Request) {

@@ -636,6 +636,26 @@ select:focus { border-color: var(--accent); }
   letter-spacing: .5px;
   margin-bottom: 8px;
 }
+.rule-rationale {
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.rule-code {
+  background: var(--bg-card, #1e293b);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rule-code.noncompliant { border-left: 3px solid #ef4444; }
+.rule-code.compliant { border-left: 3px solid #22c55e; }
 .detail-field {
   display: flex;
   justify-content: space-between;
