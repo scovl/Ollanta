@@ -14,6 +14,8 @@ type IProfileRepo interface {
 	Create(ctx context.Context, p *model.QualityProfile) error
 	Update(ctx context.Context, p *model.QualityProfile) error
 	Delete(ctx context.Context, id int64) error
+	Copy(ctx context.Context, sourceID int64, newName string) (*model.QualityProfile, error)
+	SetDefault(ctx context.Context, id int64) error
 	ActivateRule(ctx context.Context, profileID int64, ruleKey, severity string, params map[string]string) error
 	DeactivateRule(ctx context.Context, profileID int64, ruleKey string) error
 	AssignToProject(ctx context.Context, projectID int64, language string, profileID int64) error

@@ -16,7 +16,10 @@ type IGateRepo interface {
 	Delete(ctx context.Context, id int64) error
 	Conditions(ctx context.Context, gateID int64) ([]model.GateCondition, error)
 	AddCondition(ctx context.Context, c *model.GateCondition) error
+	UpdateCondition(ctx context.Context, c *model.GateCondition) error
 	RemoveCondition(ctx context.Context, conditionID int64) error
+	Copy(ctx context.Context, sourceID int64, newName string) (*model.QualityGate, error)
+	SetDefault(ctx context.Context, id int64) error
 	AssignToProject(ctx context.Context, projectID, gateID int64) error
 	ForProject(ctx context.Context, projectID int64) (*model.QualityGate, error)
 }

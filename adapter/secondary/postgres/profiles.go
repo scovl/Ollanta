@@ -109,6 +109,44 @@ func (r *ProfileRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// Copy duplicates a profile with a new name, including all its rules.
+func (r *ProfileRepository) Copy(ctx context.Context, sourceID int64, newName string) (*model.QualityProfile, error) {
+	src, err := r.GetByID(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	newProfile := &model.QualityProfile{
+		Name:     newName,
+		Language: src.Language,
+		ParentID: src.ParentID,
+	}
+	if err := r.Create(ctx, newProfile); err != nil {
+		return nil, fmt.Errorf("create copy: %w", err)
+	}
+	rules, err := r.listRules(ctx, sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("read rules: %w", err)
+	}
+	for _, rule := range rules {
+		if err := r.ActivateRule(ctx, newProfile.ID, rule.RuleKey, rule.Severity, rule.Params); err != nil {
+			return nil, fmt.Errorf("copy rule: %w", err)
+		}
+	}
+	return newProfile, nil
+}
+
+// SetDefault atomically sets a profile as default for its language.
+func (r *ProfileRepository) SetDefault(ctx context.Context, id int64) error {
+	p, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Pool.Exec(ctx,
+		`UPDATE quality_profiles SET is_default = (id = $1), updated_at = now()
+		 WHERE language = $2 AND (is_default = TRUE OR id = $1)`, id, p.Language)
+	return err
+}
+
 // ActivateRule adds or updates an active rule in a profile.
 func (r *ProfileRepository) ActivateRule(ctx context.Context, profileID int64, ruleKey, severity string, params map[string]string) error {
 	if params == nil {

@@ -30,12 +30,12 @@ CREATE TABLE IF NOT EXISTS project_profiles (
 );
 
 -- Built-in "Ollanta Way" profiles per supported language.
+-- Supported languages mirror constants.ExtensionToLanguage in ollantacore.
 INSERT INTO quality_profiles (name, language, is_default, is_builtin)
 VALUES
     ('Ollanta Way', 'go',         TRUE, TRUE),
-    ('Ollanta Way', 'java',       TRUE, TRUE),
     ('Ollanta Way', 'python',     TRUE, TRUE),
     ('Ollanta Way', 'javascript', TRUE, TRUE),
     ('Ollanta Way', 'typescript', TRUE, TRUE),
-    ('Ollanta Way', 'csharp',     TRUE, TRUE)
+    ('Ollanta Way', 'rust',       TRUE, TRUE)
 ON CONFLICT (name, language) DO NOTHING;

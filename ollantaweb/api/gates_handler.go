@@ -138,6 +138,66 @@ func (h *GatesHandler) RemoveCondition(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateCondition handles PUT /api/v1/quality-gates/{id}/conditions/{cid}
+func (h *GatesHandler) UpdateCondition(w http.ResponseWriter, r *http.Request) {
+	cid, err := parseID(r, "cid")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid condition id")
+		return
+	}
+	var c postgres.GateCondition
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	c.ID = cid
+	if err := h.gates.UpdateCondition(r.Context(), &c); err != nil {
+		if errors.Is(err, postgres.ErrNotFound) {
+			jsonError(w, http.StatusNotFound, "condition not found")
+			return
+		}
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, c)
+}
+
+// Copy handles POST /api/v1/quality-gates/{id}/copy
+func (h *GatesHandler) Copy(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		jsonError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	gate, err := h.gates.Copy(r.Context(), id, req.Name)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusCreated, gate)
+}
+
+// SetDefault handles POST /api/v1/quality-gates/{id}/set-default
+func (h *GatesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.gates.SetDefault(r.Context(), id); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // AssignToProject handles POST /api/v1/projects/{key}/quality-gate
 func (h *GatesHandler) AssignToProject(w http.ResponseWriter, r *http.Request) {
 	key := routeParam(r, "key")

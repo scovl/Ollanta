@@ -176,3 +176,39 @@ func (h *ProfilesHandler) AssignToProject(w http.ResponseWriter, r *http.Request
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// Copy handles POST /api/v1/profiles/{id}/copy
+func (h *ProfilesHandler) Copy(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		jsonError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	profile, err := h.profiles.Copy(r.Context(), id, req.Name)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusCreated, profile)
+}
+
+// SetDefault handles POST /api/v1/profiles/{id}/set-default
+func (h *ProfilesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.profiles.SetDefault(r.Context(), id); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

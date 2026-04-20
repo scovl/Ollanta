@@ -129,6 +129,62 @@ func (r *GateRepository) RemoveCondition(ctx context.Context, conditionID int64)
 	return err
 }
 
+// UpdateCondition updates an existing condition.
+func (r *GateRepository) UpdateCondition(ctx context.Context, c *GateCondition) error {
+	tag, err := r.db.Pool.Exec(ctx, `
+		UPDATE gate_conditions
+		SET metric = $1, operator = $2, threshold = $3, on_new_code = $4
+		WHERE id = $5`,
+		c.Metric, c.Operator, c.Threshold, c.OnNewCode, c.ID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Copy duplicates a gate with a new name, including all its conditions.
+func (r *GateRepository) Copy(ctx context.Context, sourceID int64, newName string) (*QualityGate, error) {
+	src, err := r.GetByID(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	newGate := &QualityGate{
+		Name:                newName,
+		SmallChangesetLines: src.SmallChangesetLines,
+	}
+	if err := r.Create(ctx, newGate); err != nil {
+		return nil, fmt.Errorf("create copy: %w", err)
+	}
+	conditions, err := r.Conditions(ctx, sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("read conditions: %w", err)
+	}
+	for _, c := range conditions {
+		dup := &GateCondition{
+			GateID:    newGate.ID,
+			Metric:    c.Metric,
+			Operator:  c.Operator,
+			Threshold: c.Threshold,
+			OnNewCode: c.OnNewCode,
+		}
+		if err := r.AddCondition(ctx, dup); err != nil {
+			return nil, fmt.Errorf("copy condition: %w", err)
+		}
+	}
+	return newGate, nil
+}
+
+// SetDefault atomically sets a gate as default and clears all other defaults.
+func (r *GateRepository) SetDefault(ctx context.Context, id int64) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE quality_gates SET is_default = (id = $1), updated_at = now()
+		 WHERE is_default = TRUE OR id = $1`, id)
+	return err
+}
+
 // AssignToProject sets the active gate for a project.
 func (r *GateRepository) AssignToProject(ctx context.Context, projectID, gateID int64) error {
 	_, err := r.db.Pool.Exec(ctx, `
