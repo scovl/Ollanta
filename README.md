@@ -1,5 +1,8 @@
 # Ollanta
 
+![ollanta01](docs/images/ollanta01.png)
+![ollanta02](docs/images/ollanta02.png)
+
 Ollanta is a multi-language static analysis platform written in Go. It analyses source code, reports quality issues, computes code metrics, and evaluates configurable quality gates — making it easy to enforce coding standards in any CI/CD pipeline.
 
 Inspired by [OpenStaticAnalyzer](https://github.com/sed-inf-u-szeged/OpenStaticAnalyzer), Ollanta is designed as a modular where each concern lives in its own Go module.
