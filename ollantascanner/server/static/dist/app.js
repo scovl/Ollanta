@@ -1,115 +1,169 @@
-"use strict";(()=>{var b,r=[],p=[],d=[],m=null,u=-1,O="overview",f="all",M="all",S="all",H="",q={blocker:0,critical:1,major:2,minor:3,info:4},L={blocker:"#ef4444",critical:"#f97316",major:"#eab308",minor:"#22c55e",info:"#64748b"},C={bug:"Bug",code_smell:"Code Smell",vulnerability:"Vulnerability",security_hotspot:"Hotspot"};async function V(){try{let e=await fetch("/report.json");if(!e.ok)throw new Error(`HTTP ${e.status}`);b=await e.json(),r=b.issues??[],U(),K(),W(),X(),Y(),J(),Z(),y(),te(),G(),Q(),ae(),a("tab-issue-count").textContent=String(r.length),a("tab-file-count").textContent=String(new Set(r.map(t=>t.component_path)).size)}catch(e){a("app").innerHTML=`<div class="error">Failed to load report: ${String(e)}</div>`}}document.addEventListener("DOMContentLoaded",V);function U(){let e=b.metadata,t=new Date(e.analysis_date).toLocaleString();a("project-key").textContent=e.project_key,a("scan-date").textContent=t,a("scan-version").textContent=`v${e.version}`,a("elapsed").textContent=`${e.elapsed_ms}ms`}function z(){let e=b.measures,t=[{metric:"Bugs",operator:"=",threshold:0,value:e.bugs,passed:e.bugs===0},{metric:"Vulnerabilities",operator:"=",threshold:0,value:e.vulnerabilities,passed:e.vulnerabilities===0}];return{status:t.every(n=>n.passed)?"passed":"failed",conditions:t}}function K(){let e=z(),t=a("gate-hero");t.classList.remove("gate-loading"),t.classList.add(e.status==="passed"?"gate-passed":"gate-failed"),a("gate-icon").textContent=e.status==="passed"?"\u2713":"\u2717",a("gate-status").textContent=e.status==="passed"?"Passed":"Failed";let s=e.conditions.map(n=>{let i=n.passed?"cond-pass":"cond-fail",o=n.passed?"\u2713":"\u2717";return`<div class="gate-cond ${i}">
-      <span class="gate-cond-icon">${o}</span>
-      <span class="gate-cond-metric">${l(n.metric)}</span>
-      <span class="gate-cond-value">${n.value}</span>
-    </div>`}).join("");a("gate-conditions").innerHTML=s}function W(){let e=b.measures;g("m-bugs",e.bugs),g("m-vulns",e.vulnerabilities),g("m-smells",e.code_smells),g("m-ncloc",e.ncloc),g("m-files",e.files),g("m-comments",e.comments),_("card-bugs",e.bugs,[0,1,5]),_("card-vulns",e.vulnerabilities,[0,1,3]),_("card-smells",e.code_smells,[0,10,50]),h("card-ncloc","card-neutral"),h("card-files","card-neutral"),h("card-comments","card-neutral")}function g(e,t){a(e).textContent=t.toLocaleString()}function _(e,t,s){let n=a(e);t<=s[0]?h(e,"card-green"):t<=s[1]?h(e,"card-yellow"):h(e,"card-red")}function X(){let e=k(r,c=>c.severity),t=Math.max(1,...Object.values(e)),s=["blocker","critical","major","minor","info"],n="",i="",o=r.length||1;for(let c of s){let v=e[c]??0,E=v/t*100,T=L[c]??"#64748b";n+=`<div class="sev-bar-row">
-      <span class="sev-bar-label">${c}</span>
+"use strict";(()=>{function n(e){return e.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}function V(e){return[{key:"details",label:"Details"},{key:"rule",label:"Rule"},{key:"ai-fix",label:"Fix with AI"}].map(t=>`<button class="detail-tab${e===t.key?" active":""}" data-detail-tab="${t.key}">${t.label}</button>`).join("")}var L,c=[],g=[],f=[],p=null,b=-1,U="overview",$="details",I="",k=!1,v=null,s=G(),h="all",C="all",P="all",j="",z={blocker:0,critical:1,major:2,minor:3,info:4},S={blocker:"#ef4444",critical:"#f97316",major:"#eab308",minor:"#22c55e",info:"#64748b"},q={bug:"Bug",code_smell:"Code Smell",vulnerability:"Vulnerability",security_hotspot:"Hotspot"};async function ee(){try{let e=await fetch("/report.json");if(!e.ok)throw new Error(`HTTP ${e.status}`);L=await e.json(),c=L.issues??[],te(),ae(),se(),ne(),le(),oe(),de(),w(),pe(),X(),re(),xe(),l("tab-issue-count").textContent=String(c.length),l("tab-file-count").textContent=String(new Set(c.map(i=>i.component_path)).size)}catch(e){l("app").innerHTML=`<div class="error">Failed to load report: ${String(e)}</div>`}}document.addEventListener("DOMContentLoaded",ee);function te(){let e=L.metadata,i=new Date(e.analysis_date).toLocaleString();l("project-key").textContent=e.project_key,l("scan-date").textContent=i,l("scan-version").textContent=`v${e.version}`,l("elapsed").textContent=`${e.elapsed_ms}ms`}function ie(){let e=L.measures,i=[{metric:"Bugs",operator:"=",threshold:0,value:e.bugs,passed:e.bugs===0},{metric:"Vulnerabilities",operator:"=",threshold:0,value:e.vulnerabilities,passed:e.vulnerabilities===0}];return{status:i.every(a=>a.passed)?"passed":"failed",conditions:i}}function ae(){let e=ie(),i=l("gate-hero");i.classList.remove("gate-loading"),i.classList.add(e.status==="passed"?"gate-passed":"gate-failed"),l("gate-icon").textContent=e.status==="passed"?"\u2713":"\u2717",l("gate-status").textContent=e.status==="passed"?"Passed":"Failed";let t=e.conditions.map(a=>{let o=a.passed?"cond-pass":"cond-fail",r=a.passed?"\u2713":"\u2717";return`<div class="gate-cond ${o}">
+      <span class="gate-cond-icon">${r}</span>
+      <span class="gate-cond-metric">${n(a.metric)}</span>
+      <span class="gate-cond-value">${a.value}</span>
+    </div>`}).join("");l("gate-conditions").innerHTML=t}function se(){let e=L.measures;x("m-bugs",e.bugs),x("m-vulns",e.vulnerabilities),x("m-smells",e.code_smells),x("m-ncloc",e.ncloc),x("m-files",e.files),x("m-comments",e.comments),F("card-bugs",e.bugs,[0,1,5]),F("card-vulns",e.vulnerabilities,[0,1,3]),F("card-smells",e.code_smells,[0,10,50]),A("card-ncloc","card-neutral"),A("card-files","card-neutral"),A("card-comments","card-neutral")}function x(e,i){l(e).textContent=i.toLocaleString()}function F(e,i,t){i<=t[0]?A(e,"card-green"):i<=t[1]?A(e,"card-yellow"):A(e,"card-red")}function ne(){let e=M(c,d=>d.severity),i=Math.max(1,...Object.values(e)),t=["blocker","critical","major","minor","info"],a="",o="",r=c.length||1;for(let d of t){let y=e[d]??0,E=y/i*100,T=S[d]??"#64748b";a+=`<div class="sev-bar-row">
+      <span class="sev-bar-label">${d}</span>
       <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${E}%;background:${T}"></div></div>
-      <span class="sev-bar-count">${v}</span>
-    </div>`,v>0&&(i+=`<div class="sev-segment" style="width:${v/o*100}%;background:${T}" title="${c}: ${v}"></div>`)}a("sev-bars").innerHTML=n,a("sev-proportional").innerHTML=i;let $=k(r,c=>c.type),P=Math.max(1,...Object.values($)),B={bug:"#ef4444",vulnerability:"#f97316",code_smell:"#22c55e",security_hotspot:"#eab308"},R="";for(let[c,v]of Object.entries(C)){let E=$[c]??0,T=E/P*100,N=B[c]??"#64748b";R+=`<div class="sev-bar-row">
-      <span class="sev-bar-label">${v}</span>
-      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${T}%;background:${N}"></div></div>
+      <span class="sev-bar-count">${y}</span>
+    </div>`,y>0&&(o+=`<div class="sev-segment" style="width:${y/r*100}%;background:${T}" title="${d}: ${y}"></div>`)}l("sev-bars").innerHTML=a,l("sev-proportional").innerHTML=o;let u=M(c,d=>d.type),H=Math.max(1,...Object.values(u)),Q={bug:"#ef4444",vulnerability:"#f97316",code_smell:"#22c55e",security_hotspot:"#eab308"},B="";for(let[d,y]of Object.entries(q)){let E=u[d]??0,T=E/H*100,Z=Q[d]??"#64748b";B+=`<div class="sev-bar-row">
+      <span class="sev-bar-label">${y}</span>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${T}%;background:${Z}"></div></div>
       <span class="sev-bar-count">${E}</span>
-    </div>`}a("type-bars").innerHTML=R}function Y(){let e=k(r,s=>s.component_path),t=Object.entries(e).sort((s,n)=>n[1]-s[1]).slice(0,10);if(!t.length){a("hotspot-files").innerHTML='<div class="empty-state">No issues found</div>';return}a("hotspot-files").innerHTML=t.map(([s,n])=>{let i=j(s);return`<div class="hotspot-row" data-path="${l(s)}">
-      <span class="hotspot-file" title="${l(s)}">${l(i)}</span>
-      <span class="hotspot-count">${n}</span>
-    </div>`}).join(""),a("hotspot-files").querySelectorAll(".hotspot-row").forEach(s=>{s.addEventListener("click",()=>{let n=s.dataset.path;D("files"),se(n)})})}function J(){let e=Object.entries(b.measures.by_language).sort((s,n)=>n[1]-s[1]),t=Math.max(1,e[0]?.[1]??1);if(!e.length){a("by-lang").innerHTML='<span class="empty-state">No language data</span>';return}a("by-lang").innerHTML=e.map(([s,n])=>`<div class="lang-row">
-      <span class="lang-name">${l(s)}</span>
-      <div class="lang-bar-track"><div class="lang-bar-fill" style="width:${n/t*100}%"></div></div>
-      <span class="lang-count">${n} files</span>
-    </div>`).join("")}function Q(){document.querySelectorAll(".tab").forEach(e=>{e.addEventListener("click",()=>{let t=e.dataset.tab;D(t)})})}function D(e){O=e,document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")),document.querySelector(`.tab[data-tab="${e}"]`)?.classList.add("active"),document.querySelectorAll(".panel").forEach(t=>t.classList.add("hidden")),a(`panel-${e}`).classList.remove("hidden")}function Z(){let e=[...new Set(r.map(s=>s.rule_key))].sort(),t=a("filter-rule");e.forEach(s=>{let n=document.createElement("option");n.value=s,n.textContent=s,t.appendChild(n)}),a("filter-severity").addEventListener("change",s=>{f=s.target.value,y()}),a("filter-type").addEventListener("change",s=>{M=s.target.value,y()}),t.addEventListener("change",s=>{S=s.target.value,y()}),a("search").addEventListener("input",s=>{H=s.target.value.toLowerCase(),y()}),F()}function F(){let e=k(r,s=>s.severity),t=["blocker","critical","major","minor","info"];a("sev-chips").innerHTML=t.map(s=>{let n=e[s]??0,i=L[s];return`<div class="sev-chip${f===s?" active":""}" data-sev="${s}"
-      style="--chip-color:${i};--chip-bg:${i}15">
-      <span class="chip-dot" style="background:${i}"></span>
-      ${s}
-      <span class="chip-count">${n}</span>
-    </div>`}).join(""),a("sev-chips").querySelectorAll(".sev-chip").forEach(s=>{s.addEventListener("click",()=>{let n=s.dataset.sev;f=f===n?"all":n,a("filter-severity").value=f,y(),F()})})}function y(){p=r.filter(e=>!(f!=="all"&&e.severity!==f||M!=="all"&&e.type!==M||S!=="all"&&e.rule_key!==S||H&&!`${e.component_path} ${e.message} ${e.rule_key}`.toLowerCase().includes(H))),p.sort((e,t)=>{let s=q[e.severity]??99,n=q[t.severity]??99;return s-n}),u=-1,ee()}function ee(){let e=a("issue-list");if(a("issue-count").textContent=`${p.length} issue${p.length!==1?"s":""}`,!p.length){e.innerHTML='<div class="empty-state">No issues match the current filters.</div>';return}e.innerHTML=p.map((t,s)=>{let n=L[t.severity]??"#64748b",i=j(t.component_path),o=t.end_line&&t.end_line!==t.line?`L${t.line}\u2013${t.end_line}`:`L${t.line}`,$=C[t.type]??t.type;return`<div class="issue-row" data-idx="${s}">
+    </div>`}l("type-bars").innerHTML=B}function le(){let e=M(c,t=>t.component_path),i=Object.entries(e).sort((t,a)=>a[1]-t[1]).slice(0,10);if(!i.length){l("hotspot-files").innerHTML='<div class="empty-state">No issues found</div>';return}l("hotspot-files").innerHTML=i.map(([t,a])=>{let o=N(t);return`<div class="hotspot-row" data-path="${n(t)}">
+      <span class="hotspot-file" title="${n(t)}">${n(o)}</span>
+      <span class="hotspot-count">${a}</span>
+    </div>`}).join(""),l("hotspot-files").querySelectorAll(".hotspot-row").forEach(t=>{t.addEventListener("click",()=>{let a=t.dataset.path;J("files"),ve(a)})})}function oe(){let e=Object.entries(L.measures.by_language).sort((t,a)=>a[1]-t[1]),i=Math.max(1,e[0]?.[1]??1);if(!e.length){l("by-lang").innerHTML='<span class="empty-state">No language data</span>';return}l("by-lang").innerHTML=e.map(([t,a])=>`<div class="lang-row">
+      <span class="lang-name">${n(t)}</span>
+      <div class="lang-bar-track"><div class="lang-bar-fill" style="width:${a/i*100}%"></div></div>
+      <span class="lang-count">${a} files</span>
+    </div>`).join("")}function re(){document.querySelectorAll(".tab").forEach(e=>{e.addEventListener("click",()=>{let i=e.dataset.tab;J(i)})})}function J(e){U=e,document.querySelectorAll(".tab").forEach(i=>i.classList.remove("active")),document.querySelector(`.tab[data-tab="${e}"]`)?.classList.add("active"),document.querySelectorAll(".panel").forEach(i=>i.classList.add("hidden")),l(`panel-${e}`).classList.remove("hidden")}function de(){let e=[...new Set(c.map(t=>t.rule_key))].sort((t,a)=>t.localeCompare(a)),i=l("filter-rule");e.forEach(t=>{let a=document.createElement("option");a.value=t,a.textContent=t,i.appendChild(a)}),l("filter-severity").addEventListener("change",t=>{h=t.target.value,w()}),l("filter-type").addEventListener("change",t=>{C=t.target.value,w()}),i.addEventListener("change",t=>{P=t.target.value,w()}),l("search").addEventListener("input",t=>{j=t.target.value.toLowerCase(),w()}),W()}function W(){let e=M(c,t=>t.severity),i=["blocker","critical","major","minor","info"];l("sev-chips").innerHTML=i.map(t=>{let a=e[t]??0,o=S[t]??"#64748b";return`<div class="sev-chip${h===t?" active":""}" data-sev="${t}"
+      style="--chip-color:${o};--chip-bg:${o}15">
+      <span class="chip-dot" style="background:${o}"></span>
+      ${t}
+      <span class="chip-count">${a}</span>
+    </div>`}).join(""),l("sev-chips").querySelectorAll(".sev-chip").forEach(t=>{t.addEventListener("click",()=>{let a=t.dataset.sev;h=h===a?"all":a,l("filter-severity").value=h,w(),W()})})}function w(){g=c.filter(e=>!(h!=="all"&&e.severity!==h||C!=="all"&&e.type!==C||P!=="all"&&e.rule_key!==P||j&&!`${e.component_path} ${e.message} ${e.rule_key}`.toLowerCase().includes(j))),g.sort((e,i)=>{let t=z[e.severity]??99,a=z[i.severity]??99;return t-a}),b=-1,ce()}function ce(){let e=l("issue-list"),i=g.length===1?"issue":"issues";if(l("issue-count").textContent=`${g.length} ${i}`,!g.length){e.innerHTML='<div class="empty-state">No issues match the current filters.</div>';return}e.innerHTML=g.map((t,a)=>{let o=S[t.severity]??"#64748b",r=N(t.component_path),u=t.end_line&&t.end_line!==t.line?`L${t.line}\u2013${t.end_line}`:`L${t.line}`,H=q[t.type]??t.type;return`<div class="issue-row" data-idx="${a}">
       <span class="issue-sev">
-        <span class="issue-sev-dot" style="background:${n}"></span>
-        ${l(t.severity)}
+        <span class="issue-sev-dot" style="background:${o}"></span>
+        ${n(t.severity)}
       </span>
-      <span class="issue-type">${l($)}</span>
+      <span class="issue-type">${n(H)}</span>
       <div class="issue-main">
-        <span class="issue-msg">${l(t.message)}</span>
-        <span class="issue-file" title="${l(t.component_path)}">${l(i)}:${o}</span>
+        <span class="issue-msg">${n(t.message)}</span>
+        <span class="issue-file" title="${n(t.component_path)}">${n(r)}:${u}</span>
       </div>
-      <span class="issue-rule">${l(t.rule_key)}</span>
-    </div>`}).join(""),e.querySelectorAll(".issue-row").forEach(t=>{t.addEventListener("click",()=>{let s=parseInt(t.dataset.idx,10);w(s)})})}function te(){let e=new Map;for(let t of r){let s=t.component_path;e.has(s)||e.set(s,[]),e.get(s).push(t)}d=[...e.entries()].sort((t,s)=>s[1].length-t[1].length).map(([t,s])=>({path:t,shortPath:j(t),issues:s.sort((n,i)=>n.line-i.line),expanded:!1}))}function G(){let e=a("file-tree");if(!d.length){e.innerHTML='<div class="empty-state">No issues found</div>';return}e.innerHTML=d.map((t,s)=>`<div class="file-group${t.expanded?" expanded":""}" data-gi="${s}">
+      <span class="issue-rule">${n(t.rule_key)}</span>
+    </div>`}).join(""),e.querySelectorAll(".issue-row").forEach(t=>{t.addEventListener("click",()=>{let a=Number.parseInt(t.dataset.idx,10);R(a)})})}function pe(){let e=new Map;for(let i of c){let t=i.component_path;e.has(t)||e.set(t,[]),e.get(t).push(i)}f=[...e.entries()].sort((i,t)=>t[1].length-i[1].length).map(([i,t])=>({path:i,shortPath:N(i),issues:[...t].sort((a,o)=>a.line-o.line),expanded:!1}))}function X(){let e=l("file-tree");if(!f.length){e.innerHTML='<div class="empty-state">No issues found</div>';return}e.innerHTML=f.map((i,t)=>`<div class="file-group${i.expanded?" expanded":""}" data-gi="${t}">
       <div class="file-group-header">
         <span class="file-group-chevron">\u25B6</span>
-        <span class="file-group-name" title="${l(t.path)}">${l(t.shortPath)}</span>
-        <span class="file-group-count">${t.issues.length}</span>
+        <span class="file-group-name" title="${n(i.path)}">${n(i.shortPath)}</span>
+        <span class="file-group-count">${i.issues.length}</span>
       </div>
-      <div class="file-group-issues" style="${t.expanded?"":"display:none"}">
-        ${t.issues.map((n,i)=>{let o=L[n.severity]??"#64748b";return`<div class="file-issue" data-gi="${s}" data-ii="${i}">
+      <div class="file-group-issues" style="${i.expanded?"":"display:none"}">
+        ${i.issues.map((a,o)=>{let r=S[a.severity]??"#64748b";return`<div class="file-issue" data-gi="${t}" data-ii="${o}">
             <span class="issue-sev">
-              <span class="issue-sev-dot" style="background:${o}"></span>
-              ${l(n.severity)}
+              <span class="issue-sev-dot" style="background:${r}"></span>
+              ${n(a.severity)}
             </span>
-            <span class="issue-msg">${l(n.message)}</span>
-            <span class="file-issue-line">L${n.line}</span>
+            <span class="issue-msg">${n(a.message)}</span>
+            <span class="file-issue-line">L${a.line}</span>
           </div>`}).join("")}
       </div>
-    </div>`).join(""),e.querySelectorAll(".file-group-header").forEach(t=>{t.addEventListener("click",()=>{let s=t.closest(".file-group"),n=parseInt(s.dataset.gi,10);d[n].expanded=!d[n].expanded,s.classList.toggle("expanded");let i=s.querySelector(".file-group-issues");i.style.display=d[n].expanded?"":"none"})}),e.querySelectorAll(".file-issue").forEach(t=>{t.addEventListener("click",s=>{s.stopPropagation();let n=parseInt(t.dataset.gi,10),i=parseInt(t.dataset.ii,10),o=d[n].issues[i];I(o)})})}function se(e){let t=d.findIndex(n=>n.path===e);if(t<0)return;d[t].expanded=!0,G(),document.querySelector(`.file-group[data-gi="${t}"]`)?.scrollIntoView({behavior:"smooth",block:"start"})}function w(e){u=e,m=p[e]??null,document.querySelectorAll(".issue-row").forEach(t=>t.classList.remove("selected")),document.querySelector(`.issue-row[data-idx="${e}"]`)?.classList.add("selected"),m&&I(m)}function I(e){m=e;let t=L[e.severity]??"#64748b",s=C[e.type]??e.type,n=e.end_line&&e.end_line!==e.line?`${e.line}:${e.column} \u2013 ${e.end_line}:${e.end_column}`:`${e.line}:${e.column}`,i=`
+    </div>`).join(""),e.querySelectorAll(".file-group-header").forEach(i=>{i.addEventListener("click",()=>{let t=i.closest(".file-group"),a=Number.parseInt(t.dataset.gi,10);f[a].expanded=!f[a].expanded,t.classList.toggle("expanded");let o=t.querySelector(".file-group-issues");o.style.display=f[a].expanded?"":"none"})}),e.querySelectorAll(".file-issue").forEach(i=>{i.addEventListener("click",t=>{t.stopPropagation();let a=Number.parseInt(i.dataset.gi,10),o=Number.parseInt(i.dataset.ii,10),r=f[a].issues[o];O(r)})})}function ve(e){let i=f.findIndex(a=>a.path===e);if(i<0)return;f[i].expanded=!0,X(),document.querySelector(`.file-group[data-gi="${i}"]`)?.scrollIntoView({behavior:"smooth",block:"start"})}function R(e){b=e,p=g[e]??null,document.querySelectorAll(".issue-row").forEach(i=>i.classList.remove("selected")),document.querySelector(`.issue-row[data-idx="${e}"]`)?.classList.add("selected"),p&&O(p)}function O(e){p=e,$="details",I="",k=!0,s=G(),l("detail-title").textContent=e.rule_key,_(e),l("detail-panel").classList.add("open"),l("detail-overlay").classList.add("open"),ue(e.rule_key)}async function ue(e){try{let i=await fetch(`/rules/${encodeURIComponent(e)}`);if(!i.ok)throw new Error("not found");let t=await i.json(),a="";t.rationale&&(a+=`<div class="detail-section">
+        <div class="detail-section-title">Why is this a problem?</div>
+        <div class="rule-rationale">${n(t.rationale)}</div>
+      </div>`),t.description&&t.description!==t.rationale&&(a+=`<div class="detail-section">
+        <div class="detail-section-title">Description</div>
+        <div class="rule-rationale">${n(t.description)}</div>
+      </div>`),t.noncompliant_code&&(a+=`<div class="detail-section">
+        <div class="detail-section-title">\u2718 Noncompliant Code</div>
+        <pre class="rule-code noncompliant"><code>${n(t.noncompliant_code)}</code></pre>
+      </div>`),t.compliant_code&&(a+=`<div class="detail-section">
+        <div class="detail-section-title">\u2714 Compliant Code</div>
+        <pre class="rule-code compliant"><code>${n(t.compliant_code)}</code></pre>
+      </div>`),I=a||'<div class="detail-empty">No additional rule details available.</div>'}catch{I='<div class="detail-empty">Rule details are not available for this issue.</div>'}finally{k=!1,p?.rule_key===e&&_(p)}}function D(){l("detail-panel").classList.remove("open"),l("detail-overlay").classList.remove("open"),p=null,I="",k=!1,s=G(),document.querySelectorAll(".issue-row").forEach(e=>e.classList.remove("selected"))}function _(e){let i=`
+    <div class="detail-tabs">
+      ${V($)}
+    </div>
+    <div class="detail-tab-panel${$==="details"?"":" hidden"}" data-detail-panel="details">
+      ${fe(e)}
+    </div>
+    <div class="detail-tab-panel${$==="rule"?"":" hidden"}" data-detail-panel="rule">
+      ${k?'<div class="detail-loading">Loading rule details\u2026</div>':I}
+    </div>
+    <div class="detail-tab-panel${$==="ai-fix"?"":" hidden"}" data-detail-panel="ai-fix">
+      ${Y(e,s,v??[])}
+    </div>
+  `;l("detail-body").innerHTML=i,ye(e)}function fe(e){let i=S[e.severity]??"#64748b",t=q[e.type]??e.type,a=e.end_line&&e.end_line!==e.line?`${e.line}:${e.column} \u2013 ${e.end_line}:${e.end_column}`:`${e.line}:${e.column}`,o=`
     <div class="detail-section">
-      <div class="detail-msg">${l(e.message)}</div>
+      <div class="detail-msg">${n(e.message)}</div>
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Properties</div>
       <div class="detail-field">
         <span class="detail-field-label">Severity</span>
-        <span class="detail-field-value"><span class="issue-sev-dot" style="background:${t};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${l(e.severity)}</span>
+        <span class="detail-field-value"><span class="issue-sev-dot" style="background:${i};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${n(e.severity)}</span>
       </div>
       <div class="detail-field">
         <span class="detail-field-label">Type</span>
-        <span class="detail-field-value">${l(s)}</span>
+        <span class="detail-field-value">${n(t)}</span>
       </div>
       <div class="detail-field">
         <span class="detail-field-label">Rule</span>
-        <span class="detail-field-value" style="font-family:var(--font-mono);color:var(--accent)">${l(e.rule_key)}</span>
+        <span class="detail-field-value" style="font-family:var(--font-mono);color:var(--accent)">${n(e.rule_key)}</span>
       </div>
       <div class="detail-field">
         <span class="detail-field-label">Status</span>
-        <span class="detail-field-value">${l(e.status)}</span>
+        <span class="detail-field-value">${n(e.status)}</span>
       </div>
       ${e.engine_id?`<div class="detail-field">
         <span class="detail-field-label">Engine</span>
-        <span class="detail-field-value">${l(e.engine_id)}</span>
+        <span class="detail-field-value">${n(e.engine_id)}</span>
       </div>`:""}
       ${e.tags?.length?`<div class="detail-field">
         <span class="detail-field-label">Tags</span>
-        <span class="detail-field-value">${e.tags.map(o=>l(o)).join(", ")}</span>
+        <span class="detail-field-value">${e.tags.map(r=>n(r)).join(", ")}</span>
       </div>`:""}
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Location</div>
       <div class="detail-field">
         <span class="detail-field-label">File</span>
-        <span class="detail-field-value" style="font-family:var(--font-mono);font-size:12px;word-break:break-all">${l(e.component_path)}</span>
+        <span class="detail-field-value" style="font-family:var(--font-mono);font-size:12px;word-break:break-all">${n(e.component_path)}</span>
       </div>
       <div class="detail-field">
         <span class="detail-field-label">Lines</span>
-        <span class="detail-field-value" style="font-family:var(--font-mono)">${n}</span>
+        <span class="detail-field-value" style="font-family:var(--font-mono)">${a}</span>
       </div>
-    </div>`;e.secondary_locations?.length&&(i+=`<div class="detail-section">
+    </div>`;return e.secondary_locations?.length&&(o+=`<div class="detail-section">
       <div class="detail-section-title">Related Locations (${e.secondary_locations.length})</div>
       <div class="detail-loc-list">
-        ${e.secondary_locations.map((o,$)=>`
+        ${e.secondary_locations.map(r=>`
           <div class="detail-loc-item">
-            <div class="detail-loc-file">${l(o.file_path||e.component_path)}:${o.start_line}</div>
-            ${o.message?`<div class="detail-loc-msg">${l(o.message)}</div>`:""}
+            <div class="detail-loc-file">${n(r.file_path||e.component_path)}:${r.start_line}</div>
+            ${r.message?`<div class="detail-loc-msg">${n(r.message)}</div>`:""}
           </div>
         `).join("")}
       </div>
-    </div>`),a("detail-title").textContent=e.rule_key,a("detail-body").innerHTML=i,a("detail-panel").classList.add("open"),a("detail-overlay").classList.add("open"),ne(e.rule_key)}async function ne(e){if(!document.getElementById("rule-detail-section")){let s=a("detail-body"),n=document.createElement("div");n.id="rule-detail-section",n.innerHTML='<div class="detail-section"><div class="detail-section-title">Loading rule details\u2026</div></div>',s.appendChild(n)}try{let s=await fetch(`/rules/${encodeURIComponent(e)}`);if(!s.ok)throw new Error("not found");let n=await s.json(),i=document.getElementById("rule-detail-section");if(!i)return;let o="";n.rationale&&(o+=`<div class="detail-section">
-        <div class="detail-section-title">Why is this a problem?</div>
-        <div class="rule-rationale">${l(n.rationale)}</div>
-      </div>`),n.description&&n.description!==n.rationale&&(o+=`<div class="detail-section">
-        <div class="detail-section-title">Description</div>
-        <div class="rule-rationale">${l(n.description)}</div>
-      </div>`),n.noncompliant_code&&(o+=`<div class="detail-section">
-        <div class="detail-section-title">\u2718 Noncompliant Code</div>
-        <pre class="rule-code noncompliant"><code>${l(n.noncompliant_code)}</code></pre>
-      </div>`),n.compliant_code&&(o+=`<div class="detail-section">
-        <div class="detail-section-title">\u2714 Compliant Code</div>
-        <pre class="rule-code compliant"><code>${l(n.compliant_code)}</code></pre>
-      </div>`),i.innerHTML=o}catch{let s=document.getElementById("rule-detail-section");s&&(s.innerHTML="")}}function x(){a("detail-panel").classList.remove("open"),a("detail-overlay").classList.remove("open"),m=null,document.querySelectorAll(".issue-row").forEach(e=>e.classList.remove("selected"))}document.addEventListener("DOMContentLoaded",()=>{a("detail-close").addEventListener("click",x),a("detail-overlay").addEventListener("click",x)});function ae(){document.addEventListener("keydown",e=>{let t=e.target.tagName;if(!(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")){if(e.key==="Escape"){x();return}O==="issues"&&(e.key==="j"||e.key==="ArrowDown"?(e.preventDefault(),u<p.length-1&&w(u+1),A()):e.key==="k"||e.key==="ArrowUp"?(e.preventDefault(),u>0&&w(u-1),A()):e.key==="Enter"&&m&&I(m))}})}function A(){document.querySelector(`.issue-row[data-idx="${u}"]`)?.scrollIntoView({behavior:"smooth",block:"nearest"})}function a(e){return document.getElementById(e)}function h(e,t){a(e).classList.add(t)}function l(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function j(e){let t=e.replace(/\\/g,"/").split("/");return t.length>3?t.slice(-3).join("/"):t.join("/")}function k(e,t){let s={};for(let n of e){let i=t(n);s[i]=(s[i]??0)+1}return s}})();
+    </div>`),o}function Y(e){let i=e.end_line&&e.end_line!==e.line?`-${e.end_line}`:"",t=(v?.length??0)>0,a=(v??[]).map(u=>`<option value="${n(u.id)}"${s.selectedAgentId===u.id?" selected":""}>${n(u.label)} \xB7 ${n(u.model)}</option>`).join(""),o=ge(t,a),r=me();return`
+    <div class="detail-section">
+      <div class="detail-section-title">Fix with AI</div>
+      <div class="detail-msg ai-fix-callout">Ollanta prepara o contexto da issue, envia apenas o trecho relevante para o agente escolhido e mostra um preview antes de qualquer escrita no seu c\xF3digo.</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-field detail-field-stack">
+        <span class="detail-field-label">Target</span>
+        <span class="detail-field-value detail-mono-block">${n(e.component_path)}:${e.line}${i}</span>
+      </div>
+      <div class="detail-field detail-field-stack">
+        <span class="detail-field-label">Issue</span>
+        <span class="detail-field-value">${n(e.message)}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Agent</div>
+      ${o}
+      ${s.statusMessage?`<div class="ai-fix-status ai-fix-status-ok">${n(s.statusMessage)}</div>`:""}
+      ${s.errorMessage?`<div class="ai-fix-status ai-fix-status-error">${n(s.errorMessage)}</div>`:""}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Preview</div>
+      ${r}
+    </div>
+  `}function ge(e,i){if(s.loadingAgents)return'<div class="detail-loading">Loading AI agents\u2026</div>';if(!e)return'<div class="detail-empty">No AI agent is configured for the local scanner.</div>';let t=s.loadingPreview?"Generating\u2026":"Generate fix",a=s.loadingPreview?" disabled":"";return`<div class="ai-fix-controls">
+      <select id="ai-agent-select" class="ai-fix-select">${i}</select>
+      <button id="ai-generate-fix" class="ai-fix-button"${a}>${t}</button>
+    </div>`}function me(){if(!s.preview)return'<div class="detail-empty">Generate a fix preview to inspect the patch before Ollanta edits your local file.</div>';let e=s.preview.summary||"Generated fix preview",i=s.preview.explanation?`<div class="rule-rationale">${n(s.preview.explanation)}</div>`:"",t=s.applying?"Applying\u2026":"Apply to file",a=s.applying?" disabled":"";return`
+    <div class="ai-fix-preview-meta">
+      <div><strong>Agent:</strong> ${n(s.preview.agent.label)}</div>
+      <div><strong>Summary:</strong> ${n(e)}</div>
+    </div>
+    ${i}
+    <pre class="rule-code ai-fix-diff"><code>${n(s.preview.diff)}</code></pre>
+    <div class="ai-fix-actions">
+      <button id="ai-apply-fix" class="ai-fix-button ai-fix-button-primary"${a}>${t}</button>
+    </div>
+  `}function ye(e){document.querySelectorAll(".detail-tab").forEach(t=>{t.addEventListener("click",()=>{$=t.dataset.detailTab??"details",_(e),$==="ai-fix"&&be()})});let i=document.getElementById("ai-agent-select");i?.addEventListener("change",()=>{s.selectedAgentId=i.value}),document.getElementById("ai-generate-fix")?.addEventListener("click",()=>{$e(e)}),document.getElementById("ai-apply-fix")?.addEventListener("click",()=>{he()})}function G(){return{loadingAgents:!1,loadingPreview:!1,applying:!1,selectedAgentId:"",statusMessage:"",errorMessage:"",preview:null}}async function be(){if(v){!s.selectedAgentId&&v.length>0&&(s.selectedAgentId=v[0].id,m());return}s.loadingAgents=!0,s.errorMessage="",m();try{let e=await fetch("/api/ai/agents");if(!e.ok)throw new Error(`HTTP ${e.status}`);v=(await e.json()).agents??[],!s.selectedAgentId&&v.length>0&&(s.selectedAgentId=v[0].id)}catch(e){s.errorMessage=`Failed to load AI agents: ${String(e)}`,v=[]}finally{s.loadingAgents=!1,m()}}async function $e(e){if(!s.selectedAgentId){s.errorMessage="Choose an AI agent before generating a fix.",m();return}s.loadingPreview=!0,s.statusMessage="",s.errorMessage="",m();try{let i=await fetch("/api/ai/fixes/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({agent_id:s.selectedAgentId,issue:e})}),t=await i.json();if(!i.ok||"error"in t)throw new Error("error"in t?t.error:`HTTP ${i.status}`);s.preview=t,s.statusMessage="Fix preview generated. Review the diff before applying it."}catch(i){s.errorMessage=`Failed to generate AI fix: ${String(i)}`,s.preview=null}finally{s.loadingPreview=!1,m()}}async function he(){if(s.preview){s.applying=!0,s.errorMessage="",m();try{let e=await fetch("/api/ai/fixes/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preview_id:s.preview.preview_id})}),i=await e.json();if(!e.ok||"error"in i)throw new Error("error"in i?i.error:`HTTP ${e.status}`);s.statusMessage=i.message}catch(e){s.errorMessage=`Failed to apply AI fix: ${String(e)}`}finally{s.applying=!1,m()}}}function m(){p&&_(p)}document.addEventListener("DOMContentLoaded",()=>{l("detail-close").addEventListener("click",D),l("detail-overlay").addEventListener("click",D)});function xe(){document.addEventListener("keydown",e=>{let i=e.target.tagName;if(!(i==="INPUT"||i==="SELECT"||i==="TEXTAREA")){if(e.key==="Escape"){D();return}U==="issues"&&(e.key==="j"||e.key==="ArrowDown"?(e.preventDefault(),b<g.length-1&&R(b+1),K()):e.key==="k"||e.key==="ArrowUp"?(e.preventDefault(),b>0&&R(b-1),K()):e.key==="Enter"&&p&&O(p))}})}function K(){document.querySelector(`.issue-row[data-idx="${b}"]`)?.scrollIntoView({behavior:"smooth",block:"nearest"})}function l(e){return document.getElementById(e)}function A(e,i){l(e).classList.add(i)}function M(e,i){let t={};for(let a of e){let o=i(a);t[o]=(t[o]??0)+1}return t}function N(e){let i=e.replaceAll("\\","/"),t=i.split("/").filter(Boolean);return t.length<=2?i:`${t.slice(-2).join("/")}`}})();

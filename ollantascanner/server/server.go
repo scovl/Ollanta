@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -24,6 +24,11 @@ import (
 //go:embed static/dist
 var staticFiles embed.FS
 
+const (
+	contentTypeHeader = "Content-Type"
+	jsonContentType   = "application/json"
+)
+
 // Serve starts a local HTTP server that exposes:
 //   - GET /           → index.html
 //   - GET /style.css  → style.css
@@ -34,6 +39,9 @@ var staticFiles embed.FS
 // container/remote access) and logs the URL to stdout.
 // The function blocks until the server is stopped.
 func Serve(reportPath, bind string, port int) error {
+	logger := slog.Default().With("component", "ollantascanner.server")
+	projectRoot := filepath.Dir(filepath.Dir(reportPath))
+
 	distFS, err := fs.Sub(staticFiles, "static/dist")
 	if err != nil {
 		return fmt.Errorf("server: embed sub: %w", err)
@@ -47,25 +55,29 @@ func Serve(reportPath, bind string, port int) error {
 	for _, m := range allMeta {
 		rules[m.Key] = m
 	}
+	aiFixService := newAIFixService(projectRoot, rules, logger)
 
 	mux.HandleFunc("/rules/", func(w http.ResponseWriter, r *http.Request) {
 		key, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/rules/"))
 		if key == "" {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(contentTypeHeader, jsonContentType)
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = fmt.Fprint(w, `{"error":"missing rule key"}`)
 			return
 		}
 		rule, ok := rules[key]
 		if !ok {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(contentTypeHeader, jsonContentType)
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = fmt.Fprint(w, `{"error":"rule not found"}`)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(contentTypeHeader, jsonContentType)
 		_ = json.NewEncoder(w).Encode(rule)
 	})
+	mux.HandleFunc("/api/ai/agents", aiFixService.handleAgents)
+	mux.HandleFunc("/api/ai/fixes/preview", aiFixService.handlePreview)
+	mux.HandleFunc("/api/ai/fixes/apply", aiFixService.handleApply)
 
 	// Serve the generated report JSON
 	mux.HandleFunc("/report.json", func(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +86,17 @@ func Serve(reportPath, bind string, port int) error {
 			http.Error(w, "report not found", http.StatusNotFound)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(contentTypeHeader, jsonContentType)
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(data)
 	})
 
 	// Serve static assets from the embedded dist/ directory
-	mux.Handle("/", http.FileServer(http.FS(distFS)))
+	staticHandler := http.FileServer(http.FS(distFS))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		staticHandler.ServeHTTP(w, r)
+	}))
 
 	addr := fmt.Sprintf("%s:%d", bind, port)
 	ln, err := net.Listen("tcp", addr)
@@ -89,7 +105,7 @@ func Serve(reportPath, bind string, port int) error {
 	}
 
 	url := fmt.Sprintf("http://%s", ln.Addr())
-	log.Printf("Ollanta UI ready → %s\n", url)
+	logger.Info("Ollanta UI ready", "url", url)
 	fmt.Printf("\nOpening report at %s\n(press Ctrl+C to stop)\n\n", url)
 
 	srv := &http.Server{

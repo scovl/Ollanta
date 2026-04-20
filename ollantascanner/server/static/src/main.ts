@@ -1,4 +1,6 @@
-import type { Report, Issue, Severity, IssueType, GateResult, GateCondition, FileGroup } from "./types";
+import { esc } from "./html";
+import type { Report, Issue, Severity, GateResult, GateCondition, FileGroup, AIAgent, AIAgentListResponse, AIFixPreview, AIFixApplyResponse } from "./types";
+import { renderAIFixContent, renderDetailTabs } from "./detailView";
 
 // ══════════════════════════════════════════════════════════════════════════
 // State
@@ -11,6 +13,22 @@ let fileGroups: FileGroup[] = [];
 let selectedIssue: Issue | null = null;
 let selectedIndex = -1;
 let activeTab = "overview";
+let detailTab: "details" | "rule" | "ai-fix" = "details";
+let detailRuleHtml = "";
+let detailRuleLoading = false;
+let cachedAgents: AIAgent[] | null = null;
+
+type AIFixPanelState = {
+  loadingAgents: boolean;
+  loadingPreview: boolean;
+  applying: boolean;
+  selectedAgentId: string;
+  statusMessage: string;
+  errorMessage: string;
+  preview: AIFixPreview | null;
+};
+
+let aiFixState: AIFixPanelState = createEmptyAIFixState();
 
 let filterSeverity = "all";
 let filterType = "all";
@@ -140,7 +158,6 @@ function setMetric(id: string, val: number): void {
 }
 
 function colorCard(id: string, val: number, thresholds: [number, number, number]): void {
-  const card = el(id);
   if (val <= thresholds[0]) addClass(id, "card-green");
   else if (val <= thresholds[1]) addClass(id, "card-yellow");
   else addClass(id, "card-red");
@@ -275,7 +292,7 @@ function switchTab(tab: string): void {
 // ══════════════════════════════════════════════════════════════════════════
 
 function populateFilters(): void {
-  const rules = [...new Set(allIssues.map(i => i.rule_key))].sort();
+  const rules = [...new Set(allIssues.map(i => i.rule_key))].sort((left, right) => left.localeCompare(right));
   const sel = el("filter-rule") as HTMLSelectElement;
   rules.forEach(r => {
     const opt = document.createElement("option");
@@ -308,7 +325,7 @@ function renderSevChips(): void {
   const sevs: Severity[] = ["blocker", "critical", "major", "minor", "info"];
   el("sev-chips").innerHTML = sevs.map(sev => {
     const count = sevCounts[sev] ?? 0;
-    const color = SEV_COLORS[sev]!;
+    const color = SEV_COLORS[sev] ?? "#64748b";
     const active = filterSeverity === sev ? " active" : "";
     return `<div class="sev-chip${active}" data-sev="${sev}"
       style="--chip-color:${color};--chip-bg:${color}15">
@@ -347,8 +364,8 @@ function applyFilters(): void {
 
   // Sort: blocker first, then critical, etc.
   filteredIssues.sort((a, b) => {
-    const sa = SEV_ORDER[a.severity as Severity] ?? 99;
-    const sb = SEV_ORDER[b.severity as Severity] ?? 99;
+    const sa = SEV_ORDER[a.severity] ?? 99;
+    const sb = SEV_ORDER[b.severity] ?? 99;
     return sa - sb;
   });
 
@@ -358,7 +375,8 @@ function applyFilters(): void {
 
 function renderIssueList(): void {
   const container = el("issue-list");
-  el("issue-count").textContent = `${filteredIssues.length} issue${filteredIssues.length !== 1 ? "s" : ""}`;
+  const issueLabel = filteredIssues.length === 1 ? "issue" : "issues";
+  el("issue-count").textContent = `${filteredIssues.length} ${issueLabel}`;
 
   if (!filteredIssues.length) {
     container.innerHTML = `<div class="empty-state">No issues match the current filters.</div>`;
@@ -388,7 +406,7 @@ function renderIssueList(): void {
   // Click handlers
   container.querySelectorAll(".issue-row").forEach(row => {
     row.addEventListener("click", () => {
-      const idx = parseInt((row as HTMLElement).dataset["idx"]!, 10);
+      const idx = Number.parseInt((row as HTMLElement).dataset["idx"]!, 10);
       selectIssue(idx);
     });
   });
@@ -410,7 +428,7 @@ function buildFileGroups(): void {
     .map(([path, issues]) => ({
       path,
       shortPath: shortenPath(path),
-      issues: issues.sort((a, b) => a.line - b.line),
+      issues: [...issues].sort((a, b) => a.line - b.line),
       expanded: false,
     }));
 }
@@ -449,7 +467,7 @@ function renderFileTree(): void {
   container.querySelectorAll(".file-group-header").forEach(hdr => {
     hdr.addEventListener("click", () => {
       const group = hdr.closest(".file-group") as HTMLElement;
-      const gi = parseInt(group.dataset["gi"]!, 10);
+      const gi = Number.parseInt(group.dataset["gi"]!, 10);
       fileGroups[gi].expanded = !fileGroups[gi].expanded;
       group.classList.toggle("expanded");
       const issues = group.querySelector(".file-group-issues") as HTMLElement;
@@ -461,8 +479,8 @@ function renderFileTree(): void {
   container.querySelectorAll(".file-issue").forEach(row => {
     row.addEventListener("click", (e) => {
       e.stopPropagation();
-      const gi = parseInt((row as HTMLElement).dataset["gi"]!, 10);
-      const ii = parseInt((row as HTMLElement).dataset["ii"]!, 10);
+      const gi = Number.parseInt((row as HTMLElement).dataset["gi"]!, 10);
+      const ii = Number.parseInt((row as HTMLElement).dataset["ii"]!, 10);
       const issue = fileGroups[gi].issues[ii];
       openDetail(issue);
     });
@@ -493,6 +511,91 @@ function selectIssue(idx: number): void {
 
 function openDetail(issue: Issue): void {
   selectedIssue = issue;
+  detailTab = "details";
+  detailRuleHtml = "";
+  detailRuleLoading = true;
+  aiFixState = createEmptyAIFixState();
+  el("detail-title").textContent = issue.rule_key;
+  renderDetailBody(issue);
+  el("detail-panel").classList.add("open");
+  el("detail-overlay").classList.add("open");
+
+  void fetchRuleDetail(issue.rule_key);
+}
+
+async function fetchRuleDetail(ruleKey: string): Promise<void> {
+  try {
+    const res = await fetch(`/rules/${encodeURIComponent(ruleKey)}`);
+    if (!res.ok) throw new Error("not found");
+    const rule = await res.json();
+
+    let rhtml = "";
+    if (rule.rationale) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">Why is this a problem?</div>
+        <div class="rule-rationale">${esc(rule.rationale)}</div>
+      </div>`;
+    }
+    if (rule.description && rule.description !== rule.rationale) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">Description</div>
+        <div class="rule-rationale">${esc(rule.description)}</div>
+      </div>`;
+    }
+    if (rule.noncompliant_code) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">✘ Noncompliant Code</div>
+        <pre class="rule-code noncompliant"><code>${esc(rule.noncompliant_code)}</code></pre>
+      </div>`;
+    }
+    if (rule.compliant_code) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">✔ Compliant Code</div>
+        <pre class="rule-code compliant"><code>${esc(rule.compliant_code)}</code></pre>
+      </div>`;
+    }
+    detailRuleHtml = rhtml || `<div class="detail-empty">No additional rule details available.</div>`;
+  } catch {
+    detailRuleHtml = `<div class="detail-empty">Rule details are not available for this issue.</div>`;
+  } finally {
+    detailRuleLoading = false;
+    if (selectedIssue?.rule_key === ruleKey) {
+      renderDetailBody(selectedIssue);
+    }
+  }
+}
+
+function closeDetail(): void {
+  el("detail-panel").classList.remove("open");
+  el("detail-overlay").classList.remove("open");
+  selectedIssue = null;
+  detailRuleHtml = "";
+  detailRuleLoading = false;
+  aiFixState = createEmptyAIFixState();
+  document.querySelectorAll(".issue-row").forEach(r => r.classList.remove("selected"));
+}
+
+function renderDetailBody(issue: Issue): void {
+  const html = `
+    <div class="detail-tabs">
+      ${renderDetailTabs(detailTab)}
+    </div>
+    <div class="detail-tab-panel${detailTab === "details" ? "" : " hidden"}" data-detail-panel="details">
+      ${renderIssueDetailContent(issue)}
+    </div>
+    <div class="detail-tab-panel${detailTab === "rule" ? "" : " hidden"}" data-detail-panel="rule">
+      ${detailRuleLoading ? `<div class="detail-loading">Loading rule details…</div>` : detailRuleHtml}
+    </div>
+    <div class="detail-tab-panel${detailTab === "ai-fix" ? "" : " hidden"}" data-detail-panel="ai-fix">
+      ${renderAIFixContent(issue, aiFixState, cachedAgents ?? [])}
+    </div>
+  `;
+
+  el("detail-body").innerHTML = html;
+  bindDetailPanelEvents(issue);
+}
+
+function renderIssueDetailContent(issue: Issue): string {
   const color = SEV_COLORS[issue.severity] ?? "#64748b";
   const typeLabel = TYPE_LABELS[issue.type] ?? issue.type;
   const loc = issue.end_line && issue.end_line !== issue.line
@@ -542,12 +645,11 @@ function openDetail(issue: Issue): void {
       </div>
     </div>`;
 
-  // Secondary locations (data flow / taint path)
   if (issue.secondary_locations?.length) {
     html += `<div class="detail-section">
       <div class="detail-section-title">Related Locations (${issue.secondary_locations.length})</div>
       <div class="detail-loc-list">
-        ${issue.secondary_locations.map((sl, i) => `
+        ${issue.secondary_locations.map(sl => `
           <div class="detail-loc-item">
             <div class="detail-loc-file">${esc(sl.file_path || issue.component_path)}:${sl.start_line}</div>
             ${sl.message ? `<div class="detail-loc-msg">${esc(sl.message)}</div>` : ""}
@@ -557,69 +659,220 @@ function openDetail(issue: Issue): void {
     </div>`;
   }
 
-  el("detail-title").textContent = issue.rule_key;
-  el("detail-body").innerHTML = html;
-  el("detail-panel").classList.add("open");
-  el("detail-overlay").classList.add("open");
-
-  // Fetch and display rule details
-  fetchRuleDetail(issue.rule_key);
+  return html;
 }
 
-async function fetchRuleDetail(ruleKey: string): Promise<void> {
-  const container = document.getElementById("rule-detail-section");
-  if (!container) {
-    // Create container if not present
-    const body = el("detail-body");
-    const div = document.createElement("div");
-    div.id = "rule-detail-section";
-    div.innerHTML = `<div class="detail-section"><div class="detail-section-title">Loading rule details…</div></div>`;
-    body.appendChild(div);
+function renderAIFixContent(issue: Issue): string {
+  const locationSuffix = issue.end_line && issue.end_line !== issue.line ? `-${issue.end_line}` : "";
+  const hasAgents = (cachedAgents?.length ?? 0) > 0;
+  const selectOptions = (cachedAgents ?? []).map(agent =>
+    `<option value="${esc(agent.id)}"${aiFixState.selectedAgentId === agent.id ? " selected" : ""}>${esc(agent.label)} · ${esc(agent.model)}</option>`
+  ).join("");
+  const agentSection = renderAIFixAgentSection(hasAgents, selectOptions);
+  const previewSection = renderAIFixPreviewSection();
+
+  return `
+    <div class="detail-section">
+      <div class="detail-section-title">Fix with AI</div>
+      <div class="detail-msg ai-fix-callout">Ollanta prepara o contexto da issue, envia apenas o trecho relevante para o agente escolhido e mostra um preview antes de qualquer escrita no seu código.</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-field detail-field-stack">
+        <span class="detail-field-label">Target</span>
+        <span class="detail-field-value detail-mono-block">${esc(issue.component_path)}:${issue.line}${locationSuffix}</span>
+      </div>
+      <div class="detail-field detail-field-stack">
+        <span class="detail-field-label">Issue</span>
+        <span class="detail-field-value">${esc(issue.message)}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Agent</div>
+      ${agentSection}
+      ${aiFixState.statusMessage ? `<div class="ai-fix-status ai-fix-status-ok">${esc(aiFixState.statusMessage)}</div>` : ""}
+      ${aiFixState.errorMessage ? `<div class="ai-fix-status ai-fix-status-error">${esc(aiFixState.errorMessage)}</div>` : ""}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Preview</div>
+      ${previewSection}
+    </div>
+  `;
+}
+
+function renderAIFixAgentSection(hasAgents: boolean, selectOptions: string): string {
+  if (aiFixState.loadingAgents) {
+    return `<div class="detail-loading">Loading AI agents…</div>`;
   }
+  if (!hasAgents) {
+    return `<div class="detail-empty">No AI agent is configured for the local scanner.</div>`;
+  }
+
+  const generateLabel = aiFixState.loadingPreview ? "Generating…" : "Generate fix";
+  const generateDisabled = aiFixState.loadingPreview ? " disabled" : "";
+  return `<div class="ai-fix-controls">
+      <select id="ai-agent-select" class="ai-fix-select">${selectOptions}</select>
+      <button id="ai-generate-fix" class="ai-fix-button"${generateDisabled}>${generateLabel}</button>
+    </div>`;
+}
+
+function renderAIFixPreviewSection(): string {
+  if (!aiFixState.preview) {
+    return `<div class="detail-empty">Generate a fix preview to inspect the patch before Ollanta edits your local file.</div>`;
+  }
+
+  const previewSummary = aiFixState.preview.summary || "Generated fix preview";
+  const explanation = aiFixState.preview.explanation
+    ? `<div class="rule-rationale">${esc(aiFixState.preview.explanation)}</div>`
+    : "";
+  const applyLabel = aiFixState.applying ? "Applying…" : "Apply to file";
+  const applyDisabled = aiFixState.applying ? " disabled" : "";
+
+  return `
+    <div class="ai-fix-preview-meta">
+      <div><strong>Agent:</strong> ${esc(aiFixState.preview.agent.label)}</div>
+      <div><strong>Summary:</strong> ${esc(previewSummary)}</div>
+    </div>
+    ${explanation}
+    <pre class="rule-code ai-fix-diff"><code>${esc(aiFixState.preview.diff)}</code></pre>
+    <div class="ai-fix-actions">
+      <button id="ai-apply-fix" class="ai-fix-button ai-fix-button-primary"${applyDisabled}>${applyLabel}</button>
+    </div>
+  `;
+}
+
+function bindDetailPanelEvents(issue: Issue): void {
+  document.querySelectorAll(".detail-tab").forEach(button => {
+    button.addEventListener("click", () => {
+      detailTab = ((button as HTMLElement).dataset["detailTab"] as "details" | "rule" | "ai-fix") ?? "details";
+      renderDetailBody(issue);
+      if (detailTab === "ai-fix") {
+        void ensureAIFixAgents();
+      }
+    });
+  });
+
+  const agentSelect = document.getElementById("ai-agent-select") as HTMLSelectElement | null;
+  agentSelect?.addEventListener("change", () => {
+    aiFixState.selectedAgentId = agentSelect.value;
+  });
+
+  document.getElementById("ai-generate-fix")?.addEventListener("click", () => {
+    void requestAIFixPreview(issue);
+  });
+  document.getElementById("ai-apply-fix")?.addEventListener("click", () => {
+    void applyAIFixPreview();
+  });
+}
+
+function createEmptyAIFixState(): AIFixPanelState {
+  return {
+    loadingAgents: false,
+    loadingPreview: false,
+    applying: false,
+    selectedAgentId: "",
+    statusMessage: "",
+    errorMessage: "",
+    preview: null,
+  };
+}
+
+async function ensureAIFixAgents(): Promise<void> {
+  if (cachedAgents) {
+    if (!aiFixState.selectedAgentId && cachedAgents.length > 0) {
+      aiFixState.selectedAgentId = cachedAgents[0].id;
+      renderSelectedIssueDetail();
+    }
+    return;
+  }
+
+  aiFixState.loadingAgents = true;
+  aiFixState.errorMessage = "";
+  renderSelectedIssueDetail();
   try {
-    const res = await fetch(`/rules/${encodeURIComponent(ruleKey)}`);
-    if (!res.ok) throw new Error("not found");
-    const rule = await res.json();
-    const target = document.getElementById("rule-detail-section");
-    if (!target) return;
-
-    let rhtml = "";
-    if (rule.rationale) {
-      rhtml += `<div class="detail-section">
-        <div class="detail-section-title">Why is this a problem?</div>
-        <div class="rule-rationale">${esc(rule.rationale)}</div>
-      </div>`;
+    const res = await fetch("/api/ai/agents");
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
-    if (rule.description && rule.description !== rule.rationale) {
-      rhtml += `<div class="detail-section">
-        <div class="detail-section-title">Description</div>
-        <div class="rule-rationale">${esc(rule.description)}</div>
-      </div>`;
+    const data = await res.json() as AIAgentListResponse;
+    cachedAgents = data.agents ?? [];
+    if (!aiFixState.selectedAgentId && cachedAgents.length > 0) {
+      aiFixState.selectedAgentId = cachedAgents[0].id;
     }
-    if (rule.noncompliant_code) {
-      rhtml += `<div class="detail-section">
-        <div class="detail-section-title">✘ Noncompliant Code</div>
-        <pre class="rule-code noncompliant"><code>${esc(rule.noncompliant_code)}</code></pre>
-      </div>`;
-    }
-    if (rule.compliant_code) {
-      rhtml += `<div class="detail-section">
-        <div class="detail-section-title">✔ Compliant Code</div>
-        <pre class="rule-code compliant"><code>${esc(rule.compliant_code)}</code></pre>
-      </div>`;
-    }
-    target.innerHTML = rhtml;
-  } catch {
-    const target = document.getElementById("rule-detail-section");
-    if (target) target.innerHTML = "";
+  } catch (error) {
+    aiFixState.errorMessage = `Failed to load AI agents: ${String(error)}`;
+    cachedAgents = [];
+  } finally {
+    aiFixState.loadingAgents = false;
+    renderSelectedIssueDetail();
   }
 }
 
-function closeDetail(): void {
-  el("detail-panel").classList.remove("open");
-  el("detail-overlay").classList.remove("open");
-  selectedIssue = null;
-  document.querySelectorAll(".issue-row").forEach(r => r.classList.remove("selected"));
+async function requestAIFixPreview(issue: Issue): Promise<void> {
+  if (!aiFixState.selectedAgentId) {
+    aiFixState.errorMessage = "Choose an AI agent before generating a fix.";
+    renderSelectedIssueDetail();
+    return;
+  }
+
+  aiFixState.loadingPreview = true;
+  aiFixState.statusMessage = "";
+  aiFixState.errorMessage = "";
+  renderSelectedIssueDetail();
+  try {
+    const res = await fetch("/api/ai/fixes/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: aiFixState.selectedAgentId, issue }),
+    });
+    const data = await res.json() as AIFixPreview | { error: string };
+    if (!res.ok || "error" in data) {
+      throw new Error("error" in data ? data.error : `HTTP ${res.status}`);
+    }
+    aiFixState.preview = data;
+    aiFixState.statusMessage = "Fix preview generated. Review the diff before applying it.";
+  } catch (error) {
+    aiFixState.errorMessage = `Failed to generate AI fix: ${String(error)}`;
+    aiFixState.preview = null;
+  } finally {
+    aiFixState.loadingPreview = false;
+    renderSelectedIssueDetail();
+  }
+}
+
+async function applyAIFixPreview(): Promise<void> {
+  if (!aiFixState.preview) {
+    return;
+  }
+
+  aiFixState.applying = true;
+  aiFixState.errorMessage = "";
+  renderSelectedIssueDetail();
+  try {
+    const res = await fetch("/api/ai/fixes/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preview_id: aiFixState.preview.preview_id }),
+    });
+    const data = await res.json() as AIFixApplyResponse | { error: string };
+    if (!res.ok || "error" in data) {
+      throw new Error("error" in data ? data.error : `HTTP ${res.status}`);
+    }
+    aiFixState.statusMessage = data.message;
+  } catch (error) {
+    aiFixState.errorMessage = `Failed to apply AI fix: ${String(error)}`;
+  } finally {
+    aiFixState.applying = false;
+    renderSelectedIssueDetail();
+  }
+}
+
+function renderSelectedIssueDetail(): void {
+  if (selectedIssue) {
+    renderDetailBody(selectedIssue);
+  }
 }
 
 // Close handlers
@@ -676,23 +929,21 @@ function addClass(id: string, cls: string): void {
   el(id).classList.add(cls);
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function shortenPath(p: string): string {
-  const parts = p.replace(/\\/g, "/").split("/");
-  return parts.length > 3 ? parts.slice(-3).join("/") : parts.join("/");
-}
-
-function countBy<T>(arr: T[], keyFn: (item: T) => string): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const item of arr) {
+function countBy<T>(items: T[], keyFn: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
     const key = keyFn(item);
-    result[key] = (result[key] ?? 0) + 1;
+    counts[key] = (counts[key] ?? 0) + 1;
   }
-  return result;
+  return counts;
 }
 
-// suppress unused-type warnings
-export type { IssueType };
+function shortenPath(path: string): string {
+  const normalized = path.replaceAll("\\", "/");
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length <= 2) {
+    return normalized;
+  }
+  return `${segments.slice(-2).join("/")}`;
+}
+

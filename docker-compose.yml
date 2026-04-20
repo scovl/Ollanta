@@ -8,6 +8,9 @@
 #   # Scan a specific project
 #   PROJECT_DIR=/path/to/myapp PROJECT_KEY=myapp docker compose up serve
 #
+#   # Enable the local mock AI agent in the scanner UI
+#   OLLANTA_AI_ENABLE_MOCK=1 docker compose up -d --build --force-recreate serve
+#
 #   # One-shot scan (no UI server, just write the report files)
 #   docker compose run --rm scan-only
 #
@@ -21,6 +24,7 @@
 #
 # Reports are written to <PROJECT_DIR>/.ollanta/
 # Scanner UI available at http://localhost:7777
+# Local AI agents are configured through environment variables on the serve service
 # API server available at http://localhost:8080
 
 name: ollanta
@@ -40,6 +44,12 @@ services:
       - "${PORT:-7777}:7777"
     environment:
       - PROJECT_KEY=${PROJECT_KEY:-project}
+      - OLLANTA_AI_ENABLE_MOCK=${OLLANTA_AI_ENABLE_MOCK:-}
+      - OLLANTA_AI_AGENTS=${OLLANTA_AI_AGENTS:-}
+      - OLLANTA_AI_OPENAI_MODEL=${OLLANTA_AI_OPENAI_MODEL:-}
+      - OLLANTA_AI_OPENAI_BASE_URL=${OLLANTA_AI_OPENAI_BASE_URL:-}
+      - OLLANTA_AI_OPENAI_LABEL=${OLLANTA_AI_OPENAI_LABEL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     command:
       - -project-dir=/project
       - -project-key=${PROJECT_KEY:-project}

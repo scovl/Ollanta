@@ -72,3 +72,35 @@ export interface FileGroup {
   issues: Issue[];
   expanded: boolean;
 }
+
+export interface AIAgent {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+}
+
+export interface AIAgentListResponse {
+  agents: AIAgent[];
+}
+
+export interface AIFixPreview {
+  preview_id: string;
+  agent: AIAgent;
+  status: string;
+  summary: string;
+  explanation: string;
+  diff: string;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  original_snippet: string;
+  replacement: string;
+}
+
+export interface AIFixApplyResponse {
+  preview_id: string;
+  status: string;
+  file_path: string;
+  message: string;
+}
