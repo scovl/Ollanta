@@ -21,6 +21,11 @@ type ScanOptions struct {
 	Sources     []string // source directory patterns (Go-style ./... accepted)
 	Exclusions  []string // glob patterns relative to ProjectDir
 	ProjectKey  string
+	Branch      string
+	CommitSHA   string
+	PullRequestKey   string
+	PullRequestBranch string
+	PullRequestBase   string
 	Format      string // "summary" | "json" | "sarif" | "all"
 	Debug       bool
 	Serve       bool          // open local web UI after scan
@@ -42,6 +47,11 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 	sources := fs.String("sources", "./...", "Comma-separated source patterns")
 	exclusions := fs.String("exclusions", "", "Comma-separated glob patterns to exclude")
 	projectKey := fs.String("project-key", "", "Project identifier (default: directory base name)")
+	branch := fs.String("branch", "", "Explicit branch override for the analysis scope")
+	commitSHA := fs.String("commit-sha", "", "Explicit commit SHA override for the analysis scope")
+	pullRequestKey := fs.String("pull-request-key", "", "Explicit pull request key for pull request analysis")
+	pullRequestBranch := fs.String("pull-request-branch", "", "Explicit source branch for pull request analysis")
+	pullRequestBase := fs.String("pull-request-base", "", "Explicit target/base branch for pull request analysis")
 	format := fs.String("format", "all", "Output format: summary, json, sarif, all")
 	debug := fs.Bool("debug", false, "Enable debug output")
 	serve := fs.Bool("serve", false, "Open interactive web UI after scan")
@@ -66,6 +76,11 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 
 	opts := &ScanOptions{
 		ProjectDir:  *projectDir,
+		Branch:      *branch,
+		CommitSHA:   *commitSHA,
+		PullRequestKey: *pullRequestKey,
+		PullRequestBranch: *pullRequestBranch,
+		PullRequestBase: *pullRequestBase,
 		Format:      *format,
 		Debug:       *debug,
 		Serve:       *serve,
@@ -128,6 +143,15 @@ func (uc *ScanUseCase) Run(ctx context.Context, opts *ScanOptions) (*Report, err
 		fmt.Fprintf(os.Stderr, "[debug] project dir: %s\n", opts.ProjectDir)
 	}
 
+	scmCtx, err := resolveSCMContext(opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.Debug && (scmCtx.Branch != "" || scmCtx.CommitSHA != "" || scmCtx.PullRequestKey != "") {
+		fmt.Fprintf(os.Stderr, "[debug] scope=%s branch=%s commit=%s pr=%s\n",
+			scmCtx.ScopeType, scmCtx.Branch, scmCtx.CommitSHA, scmCtx.PullRequestKey)
+	}
+
 	// 1. Discover files
 	files, err := Discover(opts.ProjectDir, opts.Sources, opts.Exclusions)
 	if err != nil {
@@ -144,7 +168,16 @@ func (uc *ScanUseCase) Run(ctx context.Context, opts *ScanOptions) (*Report, err
 	}
 
 	// 3. Assemble report
-	return Build(opts.ProjectKey, files, issues, time.Since(start)), nil
+	return Build(opts.ProjectKey, opts.ProjectDir, files, issues, time.Since(start), Metadata{
+		ProjectKey:      opts.ProjectKey,
+		Version:         Version,
+		ElapsedMs:       time.Since(start).Milliseconds(),
+		ScopeType:       scmCtx.ScopeType,
+		Branch:          scmCtx.Branch,
+		CommitSHA:       scmCtx.CommitSHA,
+		PullRequestKey:  scmCtx.PullRequestKey,
+		PullRequestBase: scmCtx.PullRequestBase,
+	}), nil
 }
 
 // PrintSummary writes a human-readable scan summary to stdout.

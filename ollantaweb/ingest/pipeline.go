@@ -41,6 +41,7 @@ func NewPipeline(
 	scans *postgres.ScanRepository,
 	issues *postgres.IssueRepository,
 	measures *postgres.MeasureRepository,
+	snapshots *postgres.CodeSnapshotRepository,
 	enqueuer IndexEnqueuer,
 ) *Pipeline {
 	var searchEnqueuer appingest.ISearchEnqueuer
@@ -54,6 +55,7 @@ func NewPipeline(
 			&scanRepoAdapter{inner: scans},
 			&issueRepoAdapter{inner: issues},
 			&measureRepoAdapter{inner: measures},
+			&codeSnapshotRepoAdapter{inner: snapshots},
 			searchEnqueuer,
 			nil,
 		),

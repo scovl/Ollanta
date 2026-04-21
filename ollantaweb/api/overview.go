@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -21,6 +22,7 @@ type OverviewHandler struct {
 // overviewResponse is the single-call dashboard payload.
 type overviewResponse struct {
 	Project     *postgres.Project     `json:"project"`
+	Scope       *scopeResponse        `json:"scope,omitempty"`
 	LastScan    *postgres.Scan        `json:"last_scan,omitempty"`
 	QualityGate *overviewGate         `json:"quality_gate,omitempty"`
 	Measures    map[string]float64    `json:"measures"`
@@ -38,6 +40,87 @@ type overviewNewCode struct {
 	ClosedIssues int `json:"closed_issues"`
 }
 
+func (h *OverviewHandler) resolveOverviewScope(r *http.Request) (*resolvedProjectScope, error) {
+	requested, err := parseScopeQuery(r)
+	if err != nil {
+		return nil, err
+	}
+	return resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
+}
+
+func (h *OverviewHandler) loadOverviewScan(ctx context.Context, resolved *resolvedProjectScope) (*postgres.Scan, error) {
+	if resolved == nil {
+		return nil, nil
+	}
+	return h.scans.GetLatestInScope(ctx, resolved.Project.ID, resolved.Scope, resolved.DefaultBranch)
+}
+
+func (h *OverviewHandler) applyOverviewScan(ctx context.Context, resp *overviewResponse, scan *postgres.Scan) error {
+	if scan == nil {
+		return nil
+	}
+	resp.LastScan = scan
+	resp.NewCode = &overviewNewCode{NewIssues: scan.NewIssues, ClosedIssues: scan.ClosedIssues}
+	facets, err := h.issues.Facets(ctx, scan.ProjectID, scan.ID)
+	if err == nil {
+		resp.Facets = facets
+	}
+	return nil
+}
+
+func (h *OverviewHandler) loadOverviewGate(ctx context.Context, projectID int64, scan *postgres.Scan) *overviewGate {
+	gate, conds, err := h.gates.ForProject(ctx, projectID)
+	if err != nil || gate == nil {
+		return nil
+	}
+	status := "NONE"
+	if scan != nil && scan.GateStatus != "" {
+		status = scan.GateStatus
+	}
+	return &overviewGate{Status: status, Conditions: conds}
+}
+
+func (h *OverviewHandler) fillOverviewMeasures(ctx context.Context, resp *overviewResponse, scan *postgres.Scan) {
+	if resp == nil {
+		return
+	}
+	metricKeys := []string{
+		"files", "lines", "ncloc", "comments",
+		"bugs", "code_smells", "vulnerabilities",
+		"coverage", "duplicated_lines_density",
+	}
+	for _, mk := range metricKeys {
+		if scan == nil {
+			continue
+		}
+		measure, err := h.measures.GetForScan(ctx, scan.ID, mk)
+		if err == nil && measure != nil {
+			resp.Measures[mk] = measure.Value
+		}
+	}
+	if scan == nil {
+		return
+	}
+	if _, ok := resp.Measures["files"]; !ok {
+		resp.Measures["files"] = float64(scan.TotalFiles)
+	}
+	if _, ok := resp.Measures["lines"]; !ok {
+		resp.Measures["lines"] = float64(scan.TotalLines)
+	}
+	if _, ok := resp.Measures["ncloc"]; !ok {
+		resp.Measures["ncloc"] = float64(scan.TotalNcloc)
+	}
+	if _, ok := resp.Measures["bugs"]; !ok {
+		resp.Measures["bugs"] = float64(scan.TotalBugs)
+	}
+	if _, ok := resp.Measures["code_smells"]; !ok {
+		resp.Measures["code_smells"] = float64(scan.TotalCodeSmells)
+	}
+	if _, ok := resp.Measures["vulnerabilities"]; !ok {
+		resp.Measures["vulnerabilities"] = float64(scan.TotalVulnerabilities)
+	}
+}
+
 // Overview handles GET /api/v1/projects/{key}/overview.
 //
 // Returns the project dashboard in a single response: project metadata,
@@ -45,12 +128,13 @@ type overviewNewCode struct {
 // new code summary. Modelled after SonarQube's unified dashboard call.
 func (h *OverviewHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	key := routeParam(r, "key")
-
-	// ── Project ────────────────────────────────────────────────────────
-	project, err := h.projects.GetByKey(ctx, key)
+	resolved, err := h.resolveOverviewScope(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+		jsonError(w, http.StatusNotFound, projectNotFoundMessage)
 		return
 	}
 	if err != nil {
@@ -59,76 +143,25 @@ func (h *OverviewHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := overviewResponse{
-		Project:  project,
+		Project:  resolved.Project,
+		Scope:    toScopeResponse(resolved),
 		Measures: make(map[string]float64),
 	}
 
-	// ── Latest scan ────────────────────────────────────────────────────
-	scan, err := h.scans.GetLatest(ctx, project.ID)
+	scan, err := h.loadOverviewScan(ctx, resolved)
 	if err != nil && !errors.Is(err, postgres.ErrNotFound) {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if scan != nil {
-		resp.LastScan = scan
-		resp.NewCode = &overviewNewCode{
-			NewIssues:    scan.NewIssues,
-			ClosedIssues: scan.ClosedIssues,
-		}
-
-		// ── Facets for latest scan ─────────────────────────────────
-		facets, err := h.issues.Facets(ctx, project.ID, scan.ID)
-		if err == nil {
-			resp.Facets = facets
+		if err := h.applyOverviewScan(ctx, &resp, scan); err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
 		}
 	}
 
-	// ── Quality gate ───────────────────────────────────────────────────
-	gate, conds, err := h.gates.ForProject(ctx, project.ID)
-	if err == nil && gate != nil {
-		status := "NONE"
-		if scan != nil && scan.GateStatus != "" {
-			status = scan.GateStatus
-		}
-		resp.QualityGate = &overviewGate{
-			Status:     status,
-			Conditions: conds,
-		}
-	}
-
-	// ── Key measures (latest values) ───────────────────────────────────
-	metricKeys := []string{
-		"files", "lines", "ncloc", "comments",
-		"bugs", "code_smells", "vulnerabilities",
-		"coverage", "duplicated_lines_density",
-	}
-	for _, mk := range metricKeys {
-		m, err := h.measures.GetLatest(ctx, project.ID, mk)
-		if err == nil && m != nil {
-			resp.Measures[mk] = m.Value
-		}
-	}
-	// Also fill from scan totals if measures table is empty
-	if scan != nil {
-		if _, ok := resp.Measures["files"]; !ok {
-			resp.Measures["files"] = float64(scan.TotalFiles)
-		}
-		if _, ok := resp.Measures["lines"]; !ok {
-			resp.Measures["lines"] = float64(scan.TotalLines)
-		}
-		if _, ok := resp.Measures["ncloc"]; !ok {
-			resp.Measures["ncloc"] = float64(scan.TotalNcloc)
-		}
-		if _, ok := resp.Measures["bugs"]; !ok {
-			resp.Measures["bugs"] = float64(scan.TotalBugs)
-		}
-		if _, ok := resp.Measures["code_smells"]; !ok {
-			resp.Measures["code_smells"] = float64(scan.TotalCodeSmells)
-		}
-		if _, ok := resp.Measures["vulnerabilities"]; !ok {
-			resp.Measures["vulnerabilities"] = float64(scan.TotalVulnerabilities)
-		}
-	}
+	resp.QualityGate = h.loadOverviewGate(ctx, resolved.Project.ID, scan)
+	h.fillOverviewMeasures(ctx, &resp, scan)
 
 	jsonOK(w, http.StatusOK, resp)
 }

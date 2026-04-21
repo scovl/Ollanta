@@ -37,7 +37,7 @@ func (h *ProjectsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	key := routeParam(r, "key")
 	p, err := h.repo.GetByKey(r.Context(), key)
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+		jsonError(w, http.StatusNotFound, projectNotFoundMessage)
 		return
 	}
 	if err != nil {
@@ -73,7 +73,7 @@ func (h *ProjectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	key := routeParam(r, "key")
 	p, err := h.repo.GetByKey(r.Context(), key)
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+		jsonError(w, http.StatusNotFound, projectNotFoundMessage)
 		return
 	}
 	if err != nil {
@@ -83,6 +83,7 @@ func (h *ProjectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name        *string  `json:"name"`
 		Description *string  `json:"description"`
+		MainBranch  *string  `json:"main_branch"`
 		Tags        []string `json:"tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -94,6 +95,9 @@ func (h *ProjectsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Description != nil {
 		p.Description = *req.Description
+	}
+	if req.MainBranch != nil {
+		p.MainBranch = *req.MainBranch
 	}
 	if req.Tags != nil {
 		p.Tags = req.Tags
@@ -110,7 +114,7 @@ func (h *ProjectsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	key := routeParam(r, "key")
 	p, err := h.repo.GetByKey(r.Context(), key)
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+		jsonError(w, http.StatusNotFound, projectNotFoundMessage)
 		return
 	}
 	if err != nil {

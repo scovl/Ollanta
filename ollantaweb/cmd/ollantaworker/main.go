@@ -37,6 +37,7 @@ func main() {
 	indexJobRepo := postgres.NewIndexJobRepository(db)
 	issueRepo := postgres.NewIssueRepository(db)
 	measureRepo := postgres.NewMeasureRepository(db)
+	snapshotRepo := postgres.NewCodeSnapshotRepository(db)
 	webhookRepo := postgres.NewWebhookRepository(db)
 	webhookJobRepo := postgres.NewWebhookJobRepository(db)
 
@@ -52,10 +53,13 @@ func main() {
 	processor := ingest.NewScanJobProcessor(
 		workerID,
 		scanJobRepo,
-		projectRepo,
-		scanRepo,
-		issueRepo,
-		measureRepo,
+		ingest.IngestRepositories{
+			Projects:  projectRepo,
+			Scans:     scanRepo,
+			Issues:    issueRepo,
+			Measures:  measureRepo,
+			Snapshots: snapshotRepo,
+		},
 		indexEnqueuer,
 		webhookDispatcher,
 	)

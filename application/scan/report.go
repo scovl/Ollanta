@@ -4,6 +4,7 @@ package scan
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,11 @@ import (
 )
 
 const Version = "0.1.0"
+
+const (
+	DefaultCodeSnapshotMaxFileBytes  = 128 * 1024
+	DefaultCodeSnapshotMaxTotalBytes = 4 * 1024 * 1024
+)
 
 // Measures holds basic size metrics and issue type counts aggregated across all scanned files.
 type Measures struct {
@@ -31,21 +37,27 @@ type Measures struct {
 
 // Metadata describes the scan run context.
 type Metadata struct {
-	ProjectKey   string `json:"project_key"`
-	AnalysisDate string `json:"analysis_date"` // RFC 3339
-	Version      string `json:"version"`
-	ElapsedMs    int64  `json:"elapsed_ms"`
+	ProjectKey      string `json:"project_key"`
+	AnalysisDate    string `json:"analysis_date"` // RFC 3339
+	Version         string `json:"version"`
+	ElapsedMs       int64  `json:"elapsed_ms"`
+	ScopeType       string `json:"scope_type,omitempty"`
+	Branch          string `json:"branch,omitempty"`
+	CommitSHA       string `json:"commit_sha,omitempty"`
+	PullRequestKey  string `json:"pull_request_key,omitempty"`
+	PullRequestBase string `json:"pull_request_base,omitempty"`
 }
 
 // Report is the complete output of a scan run.
 type Report struct {
-	Metadata Metadata        `json:"metadata"`
-	Measures Measures        `json:"measures"`
-	Issues   []*model.Issue  `json:"issues"`
+	Metadata     Metadata             `json:"metadata"`
+	Measures     Measures             `json:"measures"`
+	Issues       []*model.Issue       `json:"issues"`
+	CodeSnapshot *model.CodeSnapshot  `json:"code_snapshot,omitempty"`
 }
 
 // Build assembles a Report from the discovered files, analysis results, and elapsed time.
-func Build(projectKey string, files []DiscoveredFile, issues []*model.Issue, elapsed time.Duration) *Report {
+func Build(projectKey, projectDir string, files []DiscoveredFile, issues []*model.Issue, elapsed time.Duration, metadata Metadata) *Report {
 	m := computeMeasures(files)
 	for _, iss := range issues {
 		switch iss.Type {
@@ -57,15 +69,26 @@ func Build(projectKey string, files []DiscoveredFile, issues []*model.Issue, ela
 			m.Vulnerabilities++
 		}
 	}
+	if metadata.ProjectKey == "" {
+		metadata.ProjectKey = projectKey
+	}
+	if metadata.AnalysisDate == "" {
+		metadata.AnalysisDate = time.Now().UTC().Format(time.RFC3339)
+	}
+	if metadata.Version == "" {
+		metadata.Version = Version
+	}
+	if metadata.ElapsedMs == 0 {
+		metadata.ElapsedMs = elapsed.Milliseconds()
+	}
+	if metadata.ScopeType == "" {
+		metadata.ScopeType = model.ScopeTypeBranch
+	}
 	return &Report{
-		Metadata: Metadata{
-			ProjectKey:   projectKey,
-			AnalysisDate: time.Now().UTC().Format(time.RFC3339),
-			Version:      Version,
-			ElapsedMs:    elapsed.Milliseconds(),
-		},
-		Measures: m,
-		Issues:   issues,
+		Metadata:     metadata,
+		Measures:     m,
+		Issues:       issues,
+		CodeSnapshot: buildCodeSnapshot(projectDir, files),
 	}
 }
 
@@ -101,6 +124,83 @@ func computeMeasures(files []DiscoveredFile) Measures {
 		m.Comments += comments
 	}
 	return m
+}
+
+func buildCodeSnapshot(baseDir string, files []DiscoveredFile) *model.CodeSnapshot {
+	snapshot := &model.CodeSnapshot{
+		Files:         make([]model.CodeSnapshotFile, 0, len(files)),
+		TotalFiles:    len(files),
+		MaxFileBytes:  DefaultCodeSnapshotMaxFileBytes,
+		MaxTotalBytes: DefaultCodeSnapshotMaxTotalBytes,
+	}
+
+	for _, file := range files {
+		path := file.Path
+		if rel, err := filepath.Rel(baseDir, file.Path); err == nil {
+			path = rel
+		}
+		path = filepath.ToSlash(path)
+
+		entry := model.CodeSnapshotFile{
+			Path:     path,
+			Language: file.Language,
+		}
+
+		src, err := os.ReadFile(file.Path)
+		if err != nil {
+			entry.IsOmitted = true
+			entry.OmittedReason = "read_error"
+			snapshot.OmittedFiles++
+			snapshot.Files = append(snapshot.Files, entry)
+			continue
+		}
+
+		entry.SizeBytes = len(src)
+		entry.LineCount = countContentLines(src)
+
+		remaining := snapshot.MaxTotalBytes - snapshot.StoredBytes
+		if remaining <= 0 {
+			entry.IsOmitted = true
+			entry.OmittedReason = "snapshot_limit"
+			snapshot.OmittedFiles++
+			snapshot.Files = append(snapshot.Files, entry)
+			continue
+		}
+
+		limit := len(src)
+		if limit > snapshot.MaxFileBytes {
+			limit = snapshot.MaxFileBytes
+			entry.IsTruncated = true
+		}
+		if limit > remaining {
+			limit = remaining
+			entry.IsTruncated = true
+		}
+		if limit <= 0 {
+			entry.IsOmitted = true
+			entry.OmittedReason = "snapshot_limit"
+			snapshot.OmittedFiles++
+			snapshot.Files = append(snapshot.Files, entry)
+			continue
+		}
+
+		entry.Content = string(src[:limit])
+		snapshot.StoredFiles++
+		snapshot.StoredBytes += limit
+		if entry.IsTruncated {
+			snapshot.TruncatedFiles++
+		}
+		snapshot.Files = append(snapshot.Files, entry)
+	}
+
+	return snapshot
+}
+
+func countContentLines(src []byte) int {
+	if len(src) == 0 {
+		return 0
+	}
+	return bytes.Count(src, []byte{'\n'}) + 1
 }
 
 // countLines returns (total lines, ncloc, comment lines) for a file.

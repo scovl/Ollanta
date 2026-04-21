@@ -37,14 +37,20 @@ type ScanJobProcessor struct {
 	inner *appingest.ScanJobProcessor
 }
 
+// IngestRepositories groups the repositories required by the durable ingest worker.
+type IngestRepositories struct {
+	Projects  *postgres.ProjectRepository
+	Scans     *postgres.ScanRepository
+	Issues    *postgres.IssueRepository
+	Measures  *postgres.MeasureRepository
+	Snapshots *postgres.CodeSnapshotRepository
+}
+
 // NewScanJobProcessor creates a background job processor for the compute role.
 func NewScanJobProcessor(
 	workerID string,
 	jobs *postgres.ScanJobRepository,
-	projects *postgres.ProjectRepository,
-	scans *postgres.ScanRepository,
-	issues *postgres.IssueRepository,
-	measures *postgres.MeasureRepository,
+	repos IngestRepositories,
 	enqueuer IndexEnqueuer,
 	dispatcher *webhook.Dispatcher,
 ) *ScanJobProcessor {
@@ -59,10 +65,11 @@ func NewScanJobProcessor(
 	}
 
 	ingestUseCase := appingest.NewIngestUseCase(
-		&projectRepoAdapter{inner: projects},
-		&scanRepoAdapter{inner: scans},
-		&issueRepoAdapter{inner: issues},
-		&measureRepoAdapter{inner: measures},
+		&projectRepoAdapter{inner: repos.Projects},
+		&scanRepoAdapter{inner: repos.Scans},
+		&issueRepoAdapter{inner: repos.Issues},
+		&measureRepoAdapter{inner: repos.Measures},
+		&codeSnapshotRepoAdapter{inner: repos.Snapshots},
 		searchEnqueuer,
 		webhookDispatcher,
 	)

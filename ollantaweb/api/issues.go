@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/scovl/ollanta/ollantastore/postgres"
@@ -13,53 +14,146 @@ import (
 type IssuesHandler struct {
 	issues    *postgres.IssueRepository
 	projects  *postgres.ProjectRepository
+	scans     *postgres.ScanRepository
 	changelog *postgres.ChangelogRepository
+}
+
+type scopedIssueSelection struct {
+	projectID int64
+	scanID    int64
+	found     bool
+}
+
+func (h *IssuesHandler) resolveIssueProject(r *http.Request, projectID *int64, projectKey string) (*postgres.Project, error) {
+	switch {
+	case projectKey != "":
+		return h.projects.GetByKey(r.Context(), projectKey)
+	case projectID != nil:
+		return h.projects.GetByID(r.Context(), *projectID)
+	default:
+		return nil, errors.New("project_id or project_key is required when filtering by branch or pull_request")
+	}
+}
+
+func (h *IssuesHandler) resolveScopedIssueSelection(r *http.Request, projectID *int64, projectKey string) (*scopedIssueSelection, error) {
+	if r.URL.Query().Get("branch") == "" && r.URL.Query().Get("pull_request") == "" {
+		return nil, nil
+	}
+	requested, err := parseScopeQuery(r)
+	if err != nil {
+		return nil, err
+	}
+	project, err := h.resolveIssueProject(r, projectID, projectKey)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := resolveProjectScopeForProject(r.Context(), project, h.scans, requested)
+	if err != nil {
+		return nil, err
+	}
+	scan, err := h.scans.GetLatestInScope(r.Context(), project.ID, resolved.Scope, resolved.DefaultBranch)
+	if errors.Is(err, postgres.ErrNotFound) {
+		return &scopedIssueSelection{projectID: project.ID, found: false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &scopedIssueSelection{projectID: project.ID, scanID: scan.ID, found: true}, nil
+}
+
+func emptyFacets() *postgres.IssueFacets {
+	return &postgres.IssueFacets{
+		BySeverity: map[string]int{},
+		ByType:     map[string]int{},
+		ByRule:     map[string]int{},
+		ByStatus:   map[string]int{},
+		ByEngineID: map[string]int{},
+		ByFile:     map[string]int{},
+		ByTags:     map[string]int{},
+	}
+}
+
+func parseOptionalInt(query url.Values, key string) int {
+	value := query.Get(key)
+	if value == "" {
+		return 0
+	}
+	number, _ := strconv.Atoi(value)
+	return number
+}
+
+func parseOptionalInt64(query url.Values, key string) *int64 {
+	value := query.Get(key)
+	if value == "" {
+		return nil
+	}
+	number, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &number
+}
+
+func assignOptionalString(value string, target **string) {
+	if value == "" {
+		return
+	}
+	*target = &value
+}
+
+func parseIssueFilter(q url.Values) (postgres.IssueFilter, string) {
+	projectKey := q.Get("project_key")
+	f := postgres.IssueFilter{
+		Limit:     parseOptionalInt(q, "limit"),
+		Offset:    parseOptionalInt(q, "offset"),
+		ProjectID: parseOptionalInt64(q, "project_id"),
+		ScanID:    parseOptionalInt64(q, "scan_id"),
+	}
+	assignOptionalString(q.Get("rule_key"), &f.RuleKey)
+	assignOptionalString(q.Get("severity"), &f.Severity)
+	assignOptionalString(q.Get("type"), &f.Type)
+	assignOptionalString(q.Get("status"), &f.Status)
+	assignOptionalString(q.Get("file"), &f.FilePath)
+	assignOptionalString(q.Get("engine_id"), &f.EngineID)
+	return f, projectKey
+}
+
+func writeEmptyIssuesResponse(w http.ResponseWriter, filter postgres.IssueFilter) {
+	jsonOK(w, http.StatusOK, map[string]interface{}{
+		"items":  []*postgres.IssueRow{},
+		"total":  0,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
 }
 
 // List handles GET /api/v1/issues with optional filter query params.
 //
 // Query params: project_id, scan_id, rule_key, severity, type, status, file, limit, offset
 func (h *IssuesHandler) List(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	f := postgres.IssueFilter{}
-
-	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			f.Limit = n
+	f, projectKey := parseIssueFilter(r.URL.Query())
+	selection, err := h.resolveScopedIssueSelection(r, f.ProjectID, projectKey)
+	if err != nil {
+		if errors.Is(err, postgres.ErrNotFound) {
+			jsonError(w, http.StatusNotFound, projectNotFoundMessage)
+			return
 		}
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	if v := q.Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			f.Offset = n
+	if selection != nil {
+		if f.ScanID != nil {
+			jsonError(w, http.StatusBadRequest, "scan_id cannot be combined with branch or pull_request")
+			return
 		}
-	}
-	if v := q.Get("project_id"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			f.ProjectID = &n
+		if !selection.found {
+			writeEmptyIssuesResponse(w, f)
+			return
 		}
-	}
-	if v := q.Get("scan_id"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			f.ScanID = &n
-		}
-	}
-	if v := q.Get("rule_key"); v != "" {
-		f.RuleKey = &v
-	}
-	if v := q.Get("severity"); v != "" {
-		f.Severity = &v
-	}
-	if v := q.Get("type"); v != "" {
-		f.Type = &v
-	}
-	if v := q.Get("status"); v != "" {
-		f.Status = &v
-	}
-	if v := q.Get("file"); v != "" {
-		f.FilePath = &v
-	}
-	if v := q.Get("engine_id"); v != "" {
-		f.EngineID = &v
+		projectID := selection.projectID
+		scanID := selection.scanID
+		f.ProjectID = &projectID
+		f.ScanID = &scanID
 	}
 
 	issues, total, err := h.issues.Query(r.Context(), f)
@@ -96,6 +190,23 @@ func (h *IssuesHandler) Facets(w http.ResponseWriter, r *http.Request) {
 		}
 		scanID = n
 	}
+	selection, err := h.resolveScopedIssueSelection(r, optionalInt64(projectID), q.Get("project_key"))
+	if err != nil {
+		if errors.Is(err, postgres.ErrNotFound) {
+			jsonError(w, http.StatusNotFound, projectNotFoundMessage)
+			return
+		}
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if selection != nil {
+		if !selection.found {
+			jsonOK(w, http.StatusOK, emptyFacets())
+			return
+		}
+		projectID = selection.projectID
+		scanID = selection.scanID
+	}
 
 	facets, err := h.issues.Facets(r.Context(), projectID, scanID)
 	if errors.Is(err, postgres.ErrNotFound) {
@@ -107,6 +218,13 @@ func (h *IssuesHandler) Facets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, http.StatusOK, facets)
+}
+
+func optionalInt64(value int64) *int64 {
+	if value == 0 {
+		return nil
+	}
+	return &value
 }
 
 // Transition handles POST /api/v1/issues/{id}/transition.

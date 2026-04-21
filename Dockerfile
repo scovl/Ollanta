@@ -42,15 +42,26 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM debian:bookworm-slim
 
 LABEL org.opencontainers.image.source="https://github.com/scovl/ollanta"
 LABEL org.opencontainers.image.description="Ollanta static analysis scanner"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && git config --system --add safe.directory /project \
+    && useradd --create-home --home-dir /home/nonroot --shell /usr/sbin/nologin --uid 65532 nonroot \
+    && mkdir -p /project \
+    && chown -R nonroot:nonroot /project /home/nonroot \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /ollanta /usr/local/bin/ollanta
 
 # /project is the default mount point for the directory being scanned.
 VOLUME ["/project"]
+
+WORKDIR /project
+USER nonroot
 
 # Expose the UI port (only active when -serve is passed).
 EXPOSE 7777

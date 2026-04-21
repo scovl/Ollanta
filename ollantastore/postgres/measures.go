@@ -72,6 +72,20 @@ func (r *MeasureRepository) GetLatest(ctx context.Context, projectID int64, metr
 	return m, err
 }
 
+// GetForScan returns a project-level metric value for a specific scan.
+func (r *MeasureRepository) GetForScan(ctx context.Context, scanID int64, metricKey string) (*MeasureRow, error) {
+	m := &MeasureRow{}
+	err := r.db.Pool.QueryRow(ctx, `
+		SELECT id, scan_id, project_id, metric_key, component_path, value, created_at
+		FROM measures
+		WHERE scan_id = $1
+		  AND metric_key = $2
+		  AND component_path = ''
+		LIMIT 1`, scanID, metricKey,
+	).Scan(&m.ID, &m.ScanID, &m.ProjectID, &m.MetricKey, &m.ComponentPath, &m.Value, &m.CreatedAt)
+	return m, err
+}
+
 // Trend returns a time-ordered series of project-level metric values between from and to.
 func (r *MeasureRepository) Trend(ctx context.Context, projectID int64, metricKey string, from, to time.Time) ([]TrendPoint, error) {
 	rows, err := r.db.Pool.Query(ctx, `

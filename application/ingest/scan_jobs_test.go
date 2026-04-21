@@ -55,6 +55,7 @@ func TestScanJobProcessorProcessNextMarksCompleted(t *testing.T) {
 	scanRepo := &fakeScanRepo{}
 	issueRepo := &fakeIssueRepo{}
 	measureRepo := &fakeMeasureRepo{}
+	snapshotRepo := &fakeCodeSnapshotRepo{}
 
 	req := &IngestRequest{
 		Metadata: IngestMetadata{ProjectKey: "demo", AnalysisDate: time.Now().UTC().Format(time.RFC3339)},
@@ -69,7 +70,7 @@ func TestScanJobProcessorProcessNextMarksCompleted(t *testing.T) {
 	processor := NewScanJobProcessor(
 		"worker-1",
 		jobRepo,
-		NewIngestUseCase(projectRepo, scanRepo, issueRepo, measureRepo, nil, nil),
+		NewIngestUseCase(projectRepo, scanRepo, issueRepo, measureRepo, snapshotRepo, nil, nil),
 	)
 
 	job, err := processor.ProcessNext(context.Background())
@@ -251,8 +252,20 @@ func (r *fakeScanRepo) GetLatest(_ context.Context, _ int64) (*model.Scan, error
 	return nil, model.ErrNotFound
 }
 
+func (r *fakeScanRepo) GetLatestInScope(_ context.Context, _ int64, _ model.AnalysisScope, _ string) (*model.Scan, error) {
+	return nil, model.ErrNotFound
+}
+
 func (r *fakeScanRepo) ListByProject(_ context.Context, _ int64) ([]*model.Scan, error) {
 	return nil, nil
+}
+
+func (r *fakeScanRepo) ListByProjectInScope(_ context.Context, _ int64, _ model.AnalysisScope, _ string) ([]*model.Scan, error) {
+	return nil, nil
+}
+
+func (r *fakeScanRepo) ResolveDefaultBranch(_ context.Context, _ int64, configured string) (string, bool, error) {
+	return configured, false, nil
 }
 
 type fakeIssueRepo struct {
@@ -299,6 +312,15 @@ func (r *fakeMeasureRepo) GetLatest(_ context.Context, _ int64, _ string) (*mode
 
 func (r *fakeMeasureRepo) Trend(_ context.Context, _ int64, _ string, _, _ time.Time) ([]model.TrendPoint, error) {
 	return nil, nil
+}
+
+type fakeCodeSnapshotRepo struct {
+	replaced *model.CodeSnapshotState
+}
+
+func (r *fakeCodeSnapshotRepo) Replace(_ context.Context, state *model.CodeSnapshotState) error {
+	r.replaced = state
+	return nil
 }
 
 func cloneScanJob(job *model.ScanJob) *model.ScanJob {

@@ -46,6 +46,7 @@ func main() {
 	indexJobRepo := postgres.NewIndexJobRepository(db)
 	issueRepo := postgres.NewIssueRepository(db)
 	measureRepo := postgres.NewMeasureRepository(db)
+	snapshotRepo := postgres.NewCodeSnapshotRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	groupRepo := postgres.NewGroupRepository(db)
 	tokenRepo := postgres.NewTokenRepository(db)
@@ -90,6 +91,7 @@ func main() {
 		IndexJobs:   indexJobRepo,
 		Issues:      issueRepo,
 		Measures:    measureRepo,
+		Snapshots:   snapshotRepo,
 		Users:       userRepo,
 		Groups:      groupRepo,
 		Tokens:      tokenRepo,

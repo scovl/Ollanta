@@ -36,6 +36,61 @@ type activityEvent struct {
 	Value    string `json:"value,omitempty"`
 }
 
+func appendScanComparisonEvents(entry *activityEntry, current, previous *postgres.Scan) {
+	if entry == nil || current == nil || previous == nil {
+		return
+	}
+	if current.GateStatus != previous.GateStatus && current.GateStatus != "" {
+		entry.Events = append(entry.Events, activityEvent{
+			Category: "QUALITY_GATE",
+			Name:     "Quality Gate " + current.GateStatus,
+			Value:    previous.GateStatus + " → " + current.GateStatus,
+		})
+	}
+	if current.Version != previous.Version && current.Version != "" {
+		entry.Events = append(entry.Events, activityEvent{Category: "VERSION", Name: "Version " + current.Version, Value: current.Version})
+	}
+	if previous.TotalIssues <= 0 || current.NewIssues <= 0 {
+		return
+	}
+	increase := float64(current.NewIssues) / float64(previous.TotalIssues)
+	if increase > 0.5 {
+		entry.Events = append(entry.Events, activityEvent{Category: "ISSUE_SPIKE", Name: "Issue spike detected", Value: strconv.Itoa(current.NewIssues) + " new issues"})
+	}
+}
+
+func buildActivityEntry(scan *postgres.Scan) activityEntry {
+	return activityEntry{
+		ScanID:       scan.ID,
+		AnalysisDate: scan.AnalysisDate,
+		Version:      scan.Version,
+		Branch:       scan.Branch,
+		GateStatus:   scan.GateStatus,
+		TotalIssues:  scan.TotalIssues,
+		NewIssues:    scan.NewIssues,
+		ClosedIssues: scan.ClosedIssues,
+	}
+}
+
+func buildActivityEntries(scans []*postgres.Scan, total, offset, limit int) []activityEntry {
+	entries := make([]activityEntry, 0, len(scans))
+	for i, s := range scans {
+		if i >= limit {
+			break
+		}
+		entry := buildActivityEntry(s)
+
+		if offset+i == total-1 {
+			entry.Events = append(entry.Events, activityEvent{Category: "FIRST_ANALYSIS", Name: "First analysis"})
+		}
+		if i+1 < len(scans) {
+			appendScanComparisonEvents(&entry, s, scans[i+1])
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
 // Activity handles GET /api/v1/projects/{key}/activity?limit=20&offset=0
 //
 // Returns a chronological timeline of scans with notable events highlighted.
@@ -43,11 +98,15 @@ type activityEvent struct {
 // version bumps, issue spikes).
 func (h *ActivityHandler) Activity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	key := routeParam(r, "key")
+	requested, err := parseScopeQuery(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	project, err := h.projects.GetByKey(ctx, key)
+	resolved, err := resolveProjectScope(ctx, h.projects, h.scans, routeParam(r, "key"), requested)
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+		jsonError(w, http.StatusNotFound, projectNotFoundMessage)
 		return
 	}
 	if err != nil {
@@ -61,80 +120,28 @@ func (h *ActivityHandler) Activity(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	scans, total, err := h.scans.ListByProject(ctx, project.ID, limit+1, offset)
+	allScans, err := h.scans.ListByProjectInScope(ctx, resolved.Project.ID, resolved.Scope, resolved.DefaultBranch)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	// Build activity entries; detect events by comparing consecutive scans.
-	entries := make([]activityEntry, 0, len(scans))
-	for i, s := range scans {
-		if i >= limit {
-			break // extra scan was only for comparison
-		}
-
-		entry := activityEntry{
-			ScanID:       s.ID,
-			AnalysisDate: s.AnalysisDate,
-			Version:      s.Version,
-			Branch:       s.Branch,
-			GateStatus:   s.GateStatus,
-			TotalIssues:  s.TotalIssues,
-			NewIssues:    s.NewIssues,
-			ClosedIssues: s.ClosedIssues,
-		}
-
-		// First analysis event
-		if i == len(scans)-1 && offset == 0 {
-			entry.Events = append(entry.Events, activityEvent{
-				Category: "FIRST_ANALYSIS",
-				Name:     "First analysis",
-			})
-		}
-
-		// Compare with the next (older) scan in the list
-		if i+1 < len(scans) {
-			prev := scans[i+1]
-
-			// Quality gate change
-			if s.GateStatus != prev.GateStatus && s.GateStatus != "" {
-				entry.Events = append(entry.Events, activityEvent{
-					Category: "QUALITY_GATE",
-					Name:     "Quality Gate " + s.GateStatus,
-					Value:    prev.GateStatus + " → " + s.GateStatus,
-				})
-			}
-
-			// Version bump
-			if s.Version != prev.Version && s.Version != "" {
-				entry.Events = append(entry.Events, activityEvent{
-					Category: "VERSION",
-					Name:     "Version " + s.Version,
-					Value:    s.Version,
-				})
-			}
-
-			// Issue spike (>50% increase in new issues)
-			if prev.TotalIssues > 0 && s.NewIssues > 0 {
-				increase := float64(s.NewIssues) / float64(prev.TotalIssues)
-				if increase > 0.5 {
-					entry.Events = append(entry.Events, activityEvent{
-						Category: "ISSUE_SPIKE",
-						Name:     "Issue spike detected",
-						Value:    strconv.Itoa(s.NewIssues) + " new issues",
-					})
-				}
-			}
-		}
-
-		entries = append(entries, entry)
+	total := len(allScans)
+	if offset > total {
+		offset = total
 	}
+	end := offset + limit + 1
+	if end > total {
+		end = total
+	}
+	scans := allScans[offset:end]
+
+	entries := buildActivityEntries(scans, total, offset, limit)
 
 	jsonOK(w, http.StatusOK, map[string]interface{}{
 		"items":  entries,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
+		"scope":  toScopeResponse(resolved),
 	})
 }

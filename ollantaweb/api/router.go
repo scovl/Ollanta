@@ -27,6 +27,7 @@ type RouterDeps struct {
 	IndexJobs   *postgres.IndexJobRepository
 	Issues      *postgres.IssueRepository
 	Measures    *postgres.MeasureRepository
+	Snapshots   *postgres.CodeSnapshotRepository
 	Users       *postgres.UserRepository
 	Groups      *postgres.GroupRepository
 	Tokens      *postgres.TokenRepository
@@ -85,11 +86,12 @@ func NewRouter(d *RouterDeps) http.Handler {
 	jobService := ingest.NewScanJobService(d.ScanJobs)
 	sh := &ScansHandler{scans: d.Scans, projects: d.Projects, jobs: jobService}
 	sjh := &ScanJobsHandler{jobs: jobService}
-	ih := &IssuesHandler{issues: d.Issues, projects: d.Projects, changelog: d.Changelog}
+	ih := &IssuesHandler{issues: d.Issues, projects: d.Projects, scans: d.Scans, changelog: d.Changelog}
 	mh := &MeasuresHandler{measures: d.Measures, projects: d.Projects}
 	srh := &SearchHandler{searcher: d.Searcher}
 	oh := &OverviewHandler{projects: d.Projects, scans: d.Scans, issues: d.Issues, measures: d.Measures, gates: d.Gates}
 	ah := &ActivityHandler{scans: d.Scans, projects: d.Projects}
+	psh := &ProjectScopeHandler{projects: d.Projects, scans: d.Scans, snapshots: d.Snapshots, issues: d.Issues}
 	outboxH := &OutboxJobsHandler{indexJobs: d.IndexJobs, webhookJobs: d.WebhookJobs}
 
 	// ── API v1 ────────────────────────────────────────────────────────────
@@ -206,6 +208,11 @@ func NewRouter(d *RouterDeps) http.Handler {
 			// Project overview & activity (SonarQube-inspired dashboard)
 			r.Get("/projects/{key}/overview", oh.Overview)
 			r.Get("/projects/{key}/activity", ah.Activity)
+			r.Get("/projects/{key}/branches", psh.Branches)
+			r.Get("/projects/{key}/pull-requests", psh.PullRequests)
+			r.Get("/projects/{key}/information", psh.Information)
+			r.Get("/projects/{key}/code/tree", psh.CodeTree)
+			r.Get("/projects/{key}/code/file", psh.CodeFile)
 
 			// Quality profiles (read is open, write requires admin)
 			r.Route("/profiles", func(r chi.Router) {

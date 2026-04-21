@@ -7,8 +7,11 @@ type Scan struct {
 	ID                   int64     `json:"id"`
 	ProjectID            int64     `json:"project_id"`
 	Version              string    `json:"version"`
+	ScopeType            string    `json:"scope_type"`
 	Branch               string    `json:"branch"`
 	CommitSHA            string    `json:"commit_sha"`
+	PullRequestKey       string    `json:"pull_request_key"`
+	PullRequestBase      string    `json:"pull_request_base"`
 	Status               string    `json:"status"`
 	ElapsedMs            int64     `json:"elapsed_ms"`
 	GateStatus           string    `json:"gate_status"`

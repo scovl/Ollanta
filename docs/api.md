@@ -39,12 +39,20 @@ docker compose --profile server up -d
 | POST   | `/api/v1/projects`                        | Create/update a project |
 | GET    | `/api/v1/projects`                        | List projects |
 | GET    | `/api/v1/projects/{key}`                  | Get project by key |
+| PUT    | `/api/v1/projects/{key}`                  | Update project metadata, including `main_branch` |
 | DELETE | `/api/v1/projects/{key}`                  | Delete project |
 | POST   | `/api/v1/scans`                           | Accept a scan report for asynchronous processing |
 | GET    | `/api/v1/scan-jobs/{id}`                  | Get durable scan-job status |
 | GET    | `/api/v1/scans/{id}`                      | Get scan by ID |
 | GET    | `/api/v1/projects/{key}/scans`            | List scans for project |
 | GET    | `/api/v1/projects/{key}/scans/latest`     | Latest scan for project |
+| GET    | `/api/v1/projects/{key}/overview`         | Scope-aware dashboard payload |
+| GET    | `/api/v1/projects/{key}/activity`         | Scope-aware activity timeline |
+| GET    | `/api/v1/projects/{key}/branches`         | Known branches and latest scan metadata |
+| GET    | `/api/v1/projects/{key}/pull-requests`    | Known pull requests and latest scan metadata |
+| GET    | `/api/v1/projects/{key}/information`      | Project metadata plus active-scope metadata |
+| GET    | `/api/v1/projects/{key}/code/tree`        | Latest code snapshot manifest for the selected scope |
+| GET    | `/api/v1/projects/{key}/code/file`        | Snapshot file content and matching issues for the selected scope |
 | GET    | `/api/v1/issues`                          | List/filter issues (project, severity, rule, status) |
 | GET    | `/api/v1/issues/facets`                   | Issue distribution facets |
 | GET    | `/api/v1/projects/{key}/measures/trend`   | Metric trend over time |
@@ -67,6 +75,46 @@ docker compose --profile push run --build --rm push
 ```
 
 If `OLLANTA_SCANNER_TOKEN` is empty on the server, ingestion falls back to regular token-based authentication.
+
+### Scope-aware project endpoints
+
+The following routes accept optional mutually exclusive `branch` and `pull_request` query parameters when their state depends on analysis scope:
+
+- `GET /api/v1/projects/{key}/scans`
+- `GET /api/v1/projects/{key}/scans/latest`
+- `GET /api/v1/projects/{key}/overview`
+- `GET /api/v1/projects/{key}/activity`
+- `GET /api/v1/projects/{key}/information`
+- `GET /api/v1/projects/{key}/code/tree`
+- `GET /api/v1/projects/{key}/code/file?path=...`
+- `GET /api/v1/issues` and `GET /api/v1/issues/facets` when `project_key` is provided
+
+Rules:
+
+- `branch` and `pull_request` cannot be combined in the same request.
+- If neither is provided, branch mode falls back to the resolved default branch for the project.
+- Default-branch resolution uses `projects.main_branch` first, then observed `main`, then observed `master`, then the most recent non-empty branch, and finally legacy blank-branch scans.
+- Historic scans that never recorded a branch remain visible through that resolved default branch for backward compatibility.
+
+### Scanner SCM metadata
+
+Scan reports now carry scope metadata in `report.json` and during ingestion:
+
+- `scope_type`: `branch` or `pull_request`
+- `branch`
+- `commit_sha`
+- `pull_request_key`
+- `pull_request_base`
+
+The scanner resolves these fields from explicit CLI flags, Git metadata, and supported CI variables. Detached HEAD runs must provide `-branch` explicitly or the scanner fails fast.
+
+### Code snapshots
+
+Every successful ingest stores the latest successful code snapshot for the selected branch or pull request scope.
+
+- `GET /api/v1/projects/{key}/code/tree` returns snapshot metadata and the file manifest without file contents.
+- `GET /api/v1/projects/{key}/code/file?path=...` returns the selected file content together with issues from the latest scan in the same scope.
+- Snapshot storage is bounded to `128 KB` per file and `4 MB` total per scope. Truncated or omitted files expose flags and omission reasons in the response.
 
 ### Asynchronous scan intake
 

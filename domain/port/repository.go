@@ -24,7 +24,15 @@ type IScanRepo interface {
 	Update(ctx context.Context, s *model.Scan) error
 	GetByID(ctx context.Context, id int64) (*model.Scan, error)
 	GetLatest(ctx context.Context, projectID int64) (*model.Scan, error)
+	GetLatestInScope(ctx context.Context, projectID int64, scope model.AnalysisScope, defaultBranch string) (*model.Scan, error)
 	ListByProject(ctx context.Context, projectID int64) ([]*model.Scan, error)
+	ListByProjectInScope(ctx context.Context, projectID int64, scope model.AnalysisScope, defaultBranch string) ([]*model.Scan, error)
+	ResolveDefaultBranch(ctx context.Context, projectID int64, configured string) (string, bool, error)
+}
+
+// ICodeSnapshotRepo is the outbound port for latest-per-scope code snapshot persistence.
+type ICodeSnapshotRepo interface {
+	Replace(ctx context.Context, state *model.CodeSnapshotState) error
 }
 
 // IScanJobRepo is the outbound port for durable scan intake state.

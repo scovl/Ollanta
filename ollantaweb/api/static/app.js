@@ -8,6 +8,7 @@ let state = {
   projects: [],
   currentProject: null,
   currentScan: null,
+  scope: emptyScope(),
   overviewData: null,    // from /overview API
   issues: [],
   issuesTotal: 0,
@@ -15,14 +16,109 @@ let state = {
   issueFilter: { severity: 'all', type: 'all', status: 'all', search: '' },
   loading: false,
   loadingIssues: false,
-  projectTab: 'overview',  // 'overview' | 'issues' | 'activity' | 'gate' | 'webhooks' | 'profiles'
+  projectTab: 'overview',  // 'overview' | 'issues' | 'activity' | 'branches' | 'pull-requests' | 'code' | 'information' | 'gate' | 'webhooks' | 'profiles'
   gateData: null,
   webhooksData: null,
   profilesData: null,
   activityData: null,
+  branchesData: null,
+  pullRequestsData: null,
+  projectInfoData: null,
+  codeTreeData: null,
+  codeFileData: null,
+  codeSelectedPath: '',
   newCodePeriod: null,
   selectedIssue: null,
 };
+
+function emptyScope() {
+  return { type: 'branch', branch: '', pullRequestKey: '', pullRequestBase: '', defaultBranch: '' };
+}
+
+function normalizeScope(scope) {
+  const next = Object.assign(emptyScope(), scope);
+  if (next.pull_request && !next.pullRequestKey) next.pullRequestKey = next.pull_request;
+  if (next.pull_request_key && !next.pullRequestKey) next.pullRequestKey = next.pull_request_key;
+  if (next.pull_request_base && !next.pullRequestBase) next.pullRequestBase = next.pull_request_base;
+  if (next.default_branch && !next.defaultBranch) next.defaultBranch = next.default_branch;
+  if (!next.type) next.type = next.pullRequestKey ? 'pull_request' : 'branch';
+  if (next.type === 'pull_request') {
+    next.branch = next.branch || '';
+  } else {
+    next.type = 'branch';
+    next.pullRequestKey = '';
+    next.pullRequestBase = '';
+  }
+  return next;
+}
+
+function buildScopeQuery(scope) {
+  const params = new URLSearchParams();
+  const current = normalizeScope(scope || state.scope);
+  if (current.type === 'pull_request' && current.pullRequestKey) {
+    params.set('pull_request', current.pullRequestKey);
+  } else if (current.branch) {
+    params.set('branch', current.branch);
+  }
+  return params;
+}
+
+function buildScopedPath(path, scope) {
+  const params = buildScopeQuery(scope);
+  const qs = params.toString();
+  if (!qs) return path;
+  return path + (path.includes('?') ? '&' : '?') + qs;
+}
+
+function parseProjectRoute(search) {
+  const params = new URLSearchParams(search || globalThis.location.search);
+  return {
+    project: params.get('project') || '',
+    tab: params.get('tab') || 'overview',
+    branch: params.get('branch') || '',
+    pullRequest: params.get('pull_request') || '',
+  };
+}
+
+function buildProjectRoute(projectKey, tab, scope) {
+  const params = new URLSearchParams();
+  if (projectKey) params.set('project', projectKey);
+  if (tab) params.set('tab', tab);
+  const scopeParams = buildScopeQuery(scope);
+  scopeParams.forEach((value, key) => params.set(key, value));
+  const qs = params.toString();
+  return qs ? '?' + qs : globalThis.location.pathname;
+}
+
+function syncProjectUrl(replace) {
+  if (!state.currentProject) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  history[method]({}, '', buildProjectRoute(state.currentProject.key, state.projectTab, state.scope));
+}
+
+function resetProjectState() {
+  state.currentProject = null;
+  state.currentScan = null;
+  state.scope = emptyScope();
+  state.overviewData = null;
+  state.issues = [];
+  state.issuesTotal = 0;
+  state.issueOffset = 0;
+  state.issueFilter = { severity: 'all', type: 'all', status: 'all', search: '' };
+  state.projectTab = 'overview';
+  state.gateData = null;
+  state.webhooksData = null;
+  state.profilesData = null;
+  state.activityData = null;
+  state.branchesData = null;
+  state.pullRequestsData = null;
+  state.projectInfoData = null;
+  state.codeTreeData = null;
+  state.codeFileData = null;
+  state.codeSelectedPath = '';
+  state.newCodePeriod = null;
+  state.selectedIssue = null;
+}
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
@@ -96,6 +192,53 @@ const SEV_LABEL  = { blocker:'Blocker', critical:'Critical', major:'Major', mino
 const TYPE_ICON  = { bug:'\uD83D\uDC1B', code_smell:'\uD83C\uDF3F', vulnerability:'\uD83D\uDD12' };
 const TYPE_COLOR = { bug:'#ef4444', code_smell:'#22c55e', vulnerability:'#f97316' };
 const TYPE_LABEL = { bug:'Bug', code_smell:'Code Smell', vulnerability:'Vulnerability' };
+
+function badgeClassForGateStatus(status) {
+  if (status === 'OK') return 'badge-ok';
+  if (status === 'WARN') return 'badge-warn';
+  return 'badge-error';
+}
+
+function cardClassForGateStatus(status) {
+  if (status === 'OK') return 'card-gate-ok';
+  if (status === 'WARN') return 'card-gate-warn';
+  if (status === 'ERROR') return 'card-gate-error';
+  return '';
+}
+
+function renderProjectTabs(activeTab, issueCount) {
+  const tabs = ['overview','issues','activity','branches','pull-requests','code','information','gate','webhooks','profiles'];
+  const labels = {
+    overview: 'Overview',
+    issues: 'Issues',
+    activity: 'Activity',
+    branches: 'Branches',
+    'pull-requests': 'Pull Requests',
+    code: 'Code',
+    information: 'Project Information',
+    gate: 'Quality Gate',
+    webhooks: 'Webhooks',
+    profiles: 'Profiles'
+  };
+  return `<div class="proj-tabs">${tabs.map(tab => {
+    const badge = tab === 'issues' && issueCount !== '' ? `<span class="tab-badge">${fmtK(issueCount)}</span>` : '';
+    const active = tab === activeTab ? ' active' : '';
+    return `<button class="tab-btn${active}" data-tab="${tab}">${labels[tab]}${badge}</button>`;
+  }).join('')}</div>`;
+}
+
+function renderProjectTabContent(tab) {
+  if (tab === 'issues') return `<div id="issues-section"></div>`;
+  if (tab === 'activity') return renderActivityTab();
+  if (tab === 'branches') return renderBranchesTab();
+  if (tab === 'pull-requests') return renderPullRequestsTab();
+  if (tab === 'code') return renderCodeTab();
+  if (tab === 'information') return renderProjectInformationTab();
+  if (tab === 'gate') return renderGateTab();
+  if (tab === 'webhooks') return renderWebhooksTab();
+  if (tab === 'profiles') return renderProfilesTab();
+  return renderOverviewTab();
+}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -193,8 +336,10 @@ function bindLogin() {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 async function loadProjects() {
+  resetProjectState();
   state.view    = 'projects';
   state.loading = true;
+  history.replaceState({}, '', globalThis.location.pathname);
   render();
 
   try {
@@ -233,13 +378,13 @@ function renderDashboard() {
 function renderProjectCard(p) {
   const tags = (p.tags || []).filter(Boolean);
   const tagsHtml = tags.length
-    ? `<div class="tags">${tags.map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>`
+    ? '<div class="tags">' + tags.map(t => '<span class="tag">' + escHtml(t) + '</span>').join('') + '</div>'
     : '';
 
   // Gate status from latest scan info (if available in project list)
   const gs = p.gate_status || '';
-  const gateCls = gs === 'OK' ? 'card-gate-ok' : gs === 'ERROR' ? 'card-gate-error' : gs === 'WARN' ? 'card-gate-warn' : '';
-  const gateBadge = gs ? `<span class="badge ${gs === 'OK' ? 'badge-ok' : gs === 'WARN' ? 'badge-warn' : 'badge-error'}">${escHtml(gs)}</span>` : '';
+  const gateCls = cardClassForGateStatus(gs);
+  const gateBadge = gs ? `<span class="badge ${badgeClassForGateStatus(gs)}">${escHtml(gs)}</span>` : '';
 
   return `<div class="project-card ${gateCls}" data-key="${escAttr(p.key)}">
     <div class="card-top">
@@ -256,37 +401,184 @@ function renderProjectCard(p) {
 
 const ISSUE_PAGE = 50;
 
-async function loadProject(key) {
-  state.view           = 'project';
-  state.currentProject = null;
-  state.currentScan    = null;
-  state.overviewData   = null;
-  state.issues         = [];
-  state.issuesTotal    = 0;
-  state.issueOffset    = 0;
-  state.issueFilter    = { severity: 'all', type: 'all', status: 'all', search: '' };
-  state.projectTab     = 'overview';
-  state.gateData       = null;
-  state.webhooksData   = null;
-  state.profilesData   = null;
-  state.activityData   = null;
-  state.newCodePeriod  = null;
-  state.selectedIssue  = null;
-  state.loading        = true;
+async function loadProject(key, route) {
+  const nextRoute = route || parseProjectRoute();
+  state.view = 'project';
+  resetProjectState();
+  state.currentProject = { key };
+  state.projectTab = nextRoute.tab || 'overview';
+  state.scope = normalizeScope({
+    type: nextRoute.pullRequest ? 'pull_request' : 'branch',
+    branch: nextRoute.branch,
+    pullRequestKey: nextRoute.pullRequest,
+  });
+  state.loading = true;
   render();
 
   try {
-    const [project, overview] = await Promise.all([
-      apiFetch('/projects/' + encodeURIComponent(key)),
-      apiFetch('/projects/' + encodeURIComponent(key) + '/overview').catch(() => null),
-    ]);
-    state.currentProject = project;
-    state.overviewData   = overview;
-    state.currentScan    = overview?.last_scan || null;
-  } catch { /* ignore */ }
+    state.currentProject = await apiFetch('/projects/' + encodeURIComponent(key));
+    await refreshProjectScope({ reloadCatalogs: true, replaceUrl: true });
+  } catch {
+    state.currentProject = null;
+  }
 
   state.loading = false;
   render();
+  await ensureProjectTabLoaded(state.projectTab);
+}
+
+async function refreshProjectScope(options) {
+  const settings = { reloadCatalogs: true, replaceUrl: false, ...options };
+  const key = state.currentProject?.key;
+  if (!key) return;
+
+  const requests = settings.reloadCatalogs
+    ? [
+        apiFetch(buildScopedPath('/projects/' + encodeURIComponent(key) + '/overview', state.scope)).catch(() => null),
+        apiFetch('/projects/' + encodeURIComponent(key) + '/branches').catch(() => ({ items: [] })),
+        apiFetch('/projects/' + encodeURIComponent(key) + '/pull-requests').catch(() => ({ items: [] })),
+      ]
+    : [apiFetch(buildScopedPath('/projects/' + encodeURIComponent(key) + '/overview', state.scope)).catch(() => null)];
+
+  const results = await Promise.all(requests);
+  const overview = results[0] || null;
+  state.overviewData = overview;
+  state.currentScan = overview?.last_scan || null;
+  if (overview?.scope) {
+    state.scope = normalizeScope(overview.scope);
+  }
+  if (settings.reloadCatalogs) {
+    state.branchesData = results[1]?.items || [];
+    state.pullRequestsData = results[2]?.items || [];
+  }
+
+  if (settings.replaceUrl) {
+    syncProjectUrl(true);
+  }
+}
+
+async function loadBranchesData() {
+  const key = state.currentProject?.key;
+  if (!key) return;
+  try {
+    const data = await apiFetch('/projects/' + encodeURIComponent(key) + '/branches');
+    state.branchesData = data.items || [];
+    if (data.default_branch && !state.scope.defaultBranch) {
+      state.scope.defaultBranch = data.default_branch;
+    }
+  } catch {
+    state.branchesData = [];
+  }
+}
+
+async function loadPullRequestsData() {
+  const key = state.currentProject?.key;
+  if (!key) return;
+  try {
+    const data = await apiFetch('/projects/' + encodeURIComponent(key) + '/pull-requests');
+    state.pullRequestsData = data.items || [];
+  } catch {
+    state.pullRequestsData = [];
+  }
+}
+
+async function loadProjectInfoData() {
+  const key = state.currentProject?.key;
+  if (!key) return;
+  try {
+    state.projectInfoData = await apiFetch(buildScopedPath('/projects/' + encodeURIComponent(key) + '/information', state.scope));
+  } catch {
+    state.projectInfoData = null;
+  }
+  render();
+}
+
+async function loadCodeTreeData() {
+  const key = state.currentProject?.key;
+  if (!key) return;
+  try {
+    state.codeTreeData = await apiFetch(buildScopedPath('/projects/' + encodeURIComponent(key) + '/code/tree', state.scope));
+    const items = state.codeTreeData?.items || [];
+    if ((!state.codeSelectedPath || !items.some(item => item.path === state.codeSelectedPath)) && items.length > 0) {
+      state.codeSelectedPath = items[0].path;
+    }
+    if (state.codeSelectedPath) {
+      await loadCodeFileData(state.codeSelectedPath);
+      return;
+    }
+    state.codeFileData = null;
+  } catch {
+    state.codeTreeData = { items: [] };
+    state.codeFileData = null;
+  }
+  render();
+}
+
+async function loadCodeFileData(path) {
+  const key = state.currentProject?.key;
+  if (!key || !path) return;
+  state.codeSelectedPath = path;
+  try {
+    state.codeFileData = await apiFetch(buildScopedPath('/projects/' + encodeURIComponent(key) + '/code/file?path=' + encodeURIComponent(path), state.scope));
+  } catch {
+    state.codeFileData = null;
+  }
+  render();
+}
+
+async function ensureProjectTabLoaded(tab) {
+  if (tab === 'issues') {
+    if (state.issues.length === 0 && !state.loadingIssues) await loadIssues();
+    return;
+  }
+
+  const loaders = {
+    activity: loadActivityData,
+    branches: async () => { await loadBranchesData(); render(); },
+    'pull-requests': async () => { await loadPullRequestsData(); render(); },
+    code: loadCodeTreeData,
+    information: loadProjectInfoData,
+    gate: loadGateData,
+    webhooks: loadWebhooksData,
+    profiles: loadProfilesData,
+  };
+  const stateKeys = {
+    activity: 'activityData',
+    branches: 'branchesData',
+    'pull-requests': 'pullRequestsData',
+    code: 'codeTreeData',
+    information: 'projectInfoData',
+    gate: 'gateData',
+    webhooks: 'webhooksData',
+    profiles: 'profilesData',
+  };
+  const stateKey = stateKeys[tab];
+  const loader = loaders[tab];
+  if (!stateKey || !loader || state[stateKey] !== null) return;
+  await loader();
+}
+
+async function changeScope(scope) {
+  state.scope = normalizeScope(scope);
+  state.currentScan = null;
+  state.overviewData = null;
+  state.activityData = null;
+  state.projectInfoData = null;
+  state.codeTreeData = null;
+  state.codeFileData = null;
+  state.codeSelectedPath = '';
+  state.issues = [];
+  state.issuesTotal = 0;
+  state.issueOffset = 0;
+  state.loading = true;
+  syncProjectUrl(false);
+  render();
+
+  await refreshProjectScope({ reloadCatalogs: true, replaceUrl: true });
+
+  state.loading = false;
+  render();
+  await ensureProjectTabLoaded(state.projectTab);
 }
 
 function renderProjectDetail() {
@@ -296,49 +588,311 @@ function renderProjectDetail() {
     return backBtn + `<div class="loading-state"><div class="spinner"></div></div>`;
   }
 
-  const p = state.currentProject;
-  if (!p) {
+  const project = state.currentProject;
+  if (!project) {
     return backBtn + `<div class="empty-state"><p>Project not found.</p></div>`;
   }
 
-  const s = state.currentScan;
-  const gateCls = !s ? '' : s.gate_status === 'OK' ? 'badge-ok' : s.gate_status === 'WARN' ? 'badge-warn' : 'badge-error';
-  const gateBadge = s && s.gate_status ? `<span class="badge ${gateCls}">${escHtml(s.gate_status)}</span>` : '';
-  const desc = [p.description, (p.tags || []).filter(Boolean).join(', ')].filter(Boolean).join(' \u00B7 ');
-
-  const tab = state.projectTab;
-  const tabs = ['overview','issues','activity','gate','webhooks','profiles'];
-  const tabLabels = { overview: 'Overview', issues: 'Issues', activity: 'Activity', gate: 'Quality Gate', webhooks: 'Webhooks', profiles: 'Profiles' };
+  const gateStatus = state.currentScan?.gate_status || '';
+  const gateBadge = gateStatus ? `<span class="badge ${badgeClassForGateStatus(gateStatus)}">${escHtml(gateStatus)}</span>` : '';
+  const desc = [project.description, (project.tags || []).filter(Boolean).join(', ')].filter(Boolean).join(' \u00B7 ');
   const issueCount = state.overviewData?.last_scan?.total_issues ?? '';
-  const tabsHtml = `<div class="proj-tabs">${tabs.map(t => {
-    let badge = '';
-    if (t === 'issues' && issueCount !== '') badge = `<span class="tab-badge">${fmtK(issueCount)}</span>`;
-    return `<button class="tab-btn${t===tab?' active':''}" data-tab="${t}">${tabLabels[t]}${badge}</button>`;
-  }).join('')}</div>`;
-
-  let tabContent = '';
-  if (tab === 'overview') {
-    tabContent = renderOverviewTab();
-  } else if (tab === 'issues') {
-    tabContent = `<div id="issues-section"></div>`;
-  } else if (tab === 'activity') {
-    tabContent = renderActivityTab();
-  } else if (tab === 'gate') {
-    tabContent = renderGateTab();
-  } else if (tab === 'webhooks') {
-    tabContent = renderWebhooksTab();
-  } else if (tab === 'profiles') {
-    tabContent = renderProfilesTab();
-  }
 
   return `
     ${backBtn}
     <div class="detail-header">
-      <h2>${escHtml(p.name || p.key)} ${gateBadge}</h2>
-      <p>${escHtml(p.key)}${desc ? ' \u2014 ' + escHtml(desc) : ''}</p>
+      <h2>${escHtml(project.name || project.key)} ${gateBadge}</h2>
+      <p>${escHtml(project.key)}${desc ? ' \u2014 ' + escHtml(desc) : ''}</p>
     </div>
-    ${tabsHtml}
-    ${tabContent}`;
+    ${renderScopeToolbar()}
+    ${renderProjectTabs(state.projectTab, issueCount)}
+    ${renderProjectTabContent(state.projectTab)}`;
+}
+
+function resolvedBranchName(scope) {
+  const current = normalizeScope(scope || state.scope);
+  return current.branch || current.defaultBranch || '';
+}
+
+function activeScopeTitle(scope) {
+  const current = normalizeScope(scope || state.scope);
+  if (current.type === 'pull_request' && current.pullRequestKey) {
+    return `Pull Request #${escHtml(current.pullRequestKey)}`;
+  }
+  return escHtml(resolvedBranchName(current) || 'Branch unavailable');
+}
+
+function activeScopeSubtitle(scope) {
+  const current = normalizeScope(scope || state.scope);
+  if (current.type === 'pull_request' && current.pullRequestKey) {
+    const branch = current.branch || 'source branch pending';
+    const base = current.pullRequestBase || current.defaultBranch || 'base branch pending';
+    return `${escHtml(branch)} \u2192 ${escHtml(base)}`;
+  }
+  const branch = resolvedBranchName(current);
+  if (!branch) {
+    return 'Git branch metadata unavailable';
+  }
+  if (current.defaultBranch && branch === current.defaultBranch) {
+    return 'Default branch';
+  }
+  return 'Branch scope';
+}
+
+function renderScopeToolbar() {
+  const scope = normalizeScope(state.scope);
+  const branches = (state.branchesData || []).filter(item => item && item.name);
+  const pullRequests = state.pullRequestsData || [];
+  const activeBranch = resolvedBranchName(scope);
+  const branchOptions = branches.length
+    ? branches.map(item => `<option value="${escAttr(item.name)}">${escHtml(item.name)}${item.is_default ? ' · default' : ''}</option>`).join('')
+    : '<option value="">No detected branch</option>';
+  const prOptions = [`<option value="">No pull request</option>`].concat(
+    pullRequests.map(item => `<option value="${escAttr(item.key)}">#${escHtml(item.key)} · ${escHtml(item.branch || 'unknown')} \u2192 ${escHtml(item.base_branch || 'unknown')}</option>`)
+  ).join('');
+
+  return `<div class="scope-toolbar">
+    <div class="scope-summary-card">
+      <span class="scope-kicker">Active scope</span>
+      <div class="scope-title">${activeScopeTitle(scope)}</div>
+      <div class="scope-subtitle">${activeScopeSubtitle(scope)}</div>
+      <div class="scope-meta">
+        <span>Default branch: ${escHtml(scope.defaultBranch || '\u2014')}</span>
+        <span>Latest analysis: ${state.currentScan?.analysis_date ? fmtDate(state.currentScan.analysis_date) : 'none yet'}</span>
+      </div>
+    </div>
+    <div class="scope-controls">
+      <label class="scope-field">
+        <span>Branch</span>
+        <select id="scopeBranchSelect" class="filter-sel"${branches.length ? '' : ' disabled'}>
+          ${branchOptions}
+        </select>
+      </label>
+      <label class="scope-field">
+        <span>Pull Request</span>
+        <select id="scopePullRequestSelect" class="filter-sel">
+          ${prOptions}
+        </select>
+      </label>
+    </div>
+  </div>`;
+}
+
+function renderBranchScanMeta(scan) {
+  if (!scan) {
+    return `<div class="scope-card-meta"><span>No successful scans yet.</span></div>`;
+  }
+  return `<div class="scope-card-meta">
+    <span>${fmtDate(scan.analysis_date)}</span>
+    <span>${fmtNum(scan.total_issues || 0)} issues</span>
+    <span>${escHtml(scan.gate_status || 'NO GATE')}</span>
+  </div>`;
+}
+
+function renderBranchesTab() {
+  const branchItems = state.branchesData;
+  if (branchItems === null) {
+    return `<div class="loading-state"><div class="spinner"></div></div>`;
+  }
+  const items = branchItems.filter(item => item && item.name);
+  if (items.length === 0) {
+    return `<div class="empty-state"><p>No named branches with analyses yet.</p></div>`;
+  }
+
+  const activeBranch = resolvedBranchName(state.scope);
+  return `<div class="scope-grid">
+    ${items.map(item => {
+      const selected = state.scope.type !== 'pull_request' && item.name === activeBranch;
+      return `<button class="scope-card${selected ? ' active' : ''}" data-branch-card="${escAttr(item.name)}">
+        <div class="scope-card-head">
+          <div>
+            <div class="scope-card-title">${escHtml(item.name)}</div>
+            <div class="scope-card-subtitle">${item.is_default ? 'Default branch' : 'Branch scope'}</div>
+          </div>
+          ${item.is_default ? '<span class="badge badge-ok">default</span>' : ''}
+        </div>
+        ${renderBranchScanMeta(item.latest_scan)}
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderPullRequestsTab() {
+  const items = state.pullRequestsData;
+  if (items === null) {
+    return `<div class="loading-state"><div class="spinner"></div></div>`;
+  }
+  if (items.length === 0) {
+    return `<div class="empty-state"><p>No pull request analyses yet.</p></div>`;
+  }
+
+  return `<div class="scope-grid">
+    ${items.map(item => {
+      const selected = state.scope.type === 'pull_request' && item.key === state.scope.pullRequestKey;
+      const badgeClass = badgeClassForGateStatus(item.latest_scan?.gate_status || 'ERROR');
+      const badgeLabel = item.latest_scan?.gate_status || 'pending';
+      return `<button class="scope-card${selected ? ' active' : ''}" data-pr-card="${escAttr(item.key)}" data-pr-branch="${escAttr(item.branch || '')}" data-pr-base="${escAttr(item.base_branch || '')}">
+        <div class="scope-card-head">
+          <div>
+            <div class="scope-card-title">Pull Request #${escHtml(item.key)}</div>
+            <div class="scope-card-subtitle">${escHtml(item.branch || 'unknown')} \u2192 ${escHtml(item.base_branch || 'unknown')}</div>
+          </div>
+          <span class="badge ${badgeClass}">${escHtml(badgeLabel)}</span>
+        </div>
+        ${renderBranchScanMeta(item.latest_scan)}
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderProjectInformationTab() {
+  const data = state.projectInfoData;
+  if (data === null) {
+    return `<div class="loading-state"><div class="spinner"></div></div>`;
+  }
+
+  const project = data.project || state.currentProject || {};
+  const scope = normalizeScope(data.scope || state.scope);
+  const snapshot = data.code_snapshot || null;
+  const measures = data.measures || {};
+
+  return `<div class="info-grid">
+    <section class="info-card">
+      <h3>Project</h3>
+      <dl class="info-list">
+        <div><dt>Name</dt><dd>${escHtml(project.name || project.key || '\u2014')}</dd></div>
+        <div><dt>Key</dt><dd class="mono">${escHtml(project.key || '\u2014')}</dd></div>
+        <div><dt>Main branch</dt><dd>${escHtml(project.main_branch || scope.defaultBranch || '\u2014')}</dd></div>
+        <div><dt>Visibility</dt><dd>${escHtml(project.visibility || '\u2014')}</dd></div>
+        <div><dt>Version</dt><dd>${escHtml(state.currentScan?.version || '\u2014')}</dd></div>
+        <div><dt>Updated</dt><dd>${project.updated_at ? fmtDate(project.updated_at) : '\u2014'}</dd></div>
+      </dl>
+    </section>
+    <section class="info-card">
+      <h3>Current scope</h3>
+      <dl class="info-list">
+        <div><dt>Type</dt><dd>${escHtml(scope.type || '\u2014')}</dd></div>
+        <div><dt>Branch</dt><dd>${escHtml(scope.branch || scope.defaultBranch || '\u2014')}</dd></div>
+        <div><dt>Pull request</dt><dd>${escHtml(scope.pullRequestKey || '\u2014')}</dd></div>
+        <div><dt>Base branch</dt><dd>${escHtml(scope.pullRequestBase || '\u2014')}</dd></div>
+        <div><dt>Commit</dt><dd class="mono">${escHtml(state.currentScan?.commit_sha || '\u2014')}</dd></div>
+        <div><dt>Last analysis</dt><dd>${state.currentScan?.analysis_date ? fmtDate(state.currentScan.analysis_date) : '\u2014'}</dd></div>
+      </dl>
+    </section>
+    <section class="info-card">
+      <h3>Measures</h3>
+      <dl class="info-list">
+        <div><dt>Files</dt><dd>${fmtNum(measures.files || 0)}</dd></div>
+        <div><dt>Lines</dt><dd>${fmtNum(measures.lines || 0)}</dd></div>
+        <div><dt>NCLOC</dt><dd>${fmtNum(measures.ncloc || 0)}</dd></div>
+        <div><dt>Issues</dt><dd>${fmtNum(measures.issues || 0)}</dd></div>
+      </dl>
+    </section>
+    <section class="info-card">
+      <h3>Code snapshot</h3>
+      <dl class="info-list">
+        <div><dt>Stored files</dt><dd>${fmtNum(snapshot?.stored_files || 0)} / ${fmtNum(snapshot?.total_files || 0)}</dd></div>
+        <div><dt>Truncated files</dt><dd>${fmtNum(snapshot?.truncated_files || 0)}</dd></div>
+        <div><dt>Omitted files</dt><dd>${fmtNum(snapshot?.omitted_files || 0)}</dd></div>
+        <div><dt>Stored bytes</dt><dd>${fmtK(snapshot?.stored_bytes || 0)}</dd></div>
+        <div><dt>Max file bytes</dt><dd>${fmtK(snapshot?.max_file_bytes || 0)}</dd></div>
+        <div><dt>Updated</dt><dd>${snapshot?.updated_at ? fmtDate(snapshot.updated_at) : '\u2014'}</dd></div>
+      </dl>
+    </section>
+  </div>`;
+}
+
+function renderCodeIssueChips(issues) {
+  return issues.map(issue => {
+    const sev = issue.severity || 'info';
+    return `<span class="code-line-chip sev-${escAttr(sev)}">${escHtml(sev)}</span>`;
+  }).join('');
+}
+
+function renderCodeViewer() {
+  const payload = state.codeFileData;
+  if (!payload?.file) {
+    return `<div class="code-empty"><p>Select a file to inspect the latest code snapshot.</p></div>`;
+  }
+
+  const file = payload.file;
+  const issues = payload.issues || [];
+  const lines = (file.content || '').split('\n');
+  const issueMap = new Map();
+  issues.forEach(issue => {
+    const start = Number(issue.line || 1);
+    const end = Number(issue.end_line || start);
+    for (let line = start; line <= end; line += 1) {
+      const items = issueMap.get(line) || [];
+      items.push(issue);
+      issueMap.set(line, items);
+    }
+  });
+
+  const rows = lines.map((line, index) => {
+    const lineNumber = index + 1;
+    const lineIssues = issueMap.get(lineNumber) || [];
+    return `<div class="code-line${lineIssues.length ? ' has-issue' : ''}">
+      <span class="code-gutter">${lineNumber}</span>
+      <code class="code-text">${line.length ? escHtml(line) : '&nbsp;'}</code>
+      <span class="code-markers">${renderCodeIssueChips(lineIssues)}</span>
+    </div>`;
+  }).join('');
+
+  const notices = [];
+  if (file.is_truncated) notices.push('This file was truncated in the snapshot payload.');
+  if (file.is_omitted) notices.push(file.omitted_reason || 'This file content was omitted from the snapshot.');
+
+  return `<div class="code-viewer-shell">
+    <div class="code-viewer-head">
+      <div>
+        <div class="code-viewer-path mono">${escHtml(file.path)}</div>
+        <div class="code-viewer-meta">${escHtml(file.language || 'plain text')} · ${fmtNum(file.line_count || lines.length)} lines · ${fmtK(file.size_bytes || 0)}</div>
+      </div>
+      <div class="code-viewer-stats">${fmtNum(issues.length)} issue${issues.length === 1 ? '' : 's'}</div>
+    </div>
+    ${notices.map(message => `<div class="code-notice">${escHtml(message)}</div>`).join('')}
+    <div class="code-surface">${rows}</div>
+    ${issues.length ? `<div class="code-issue-list">
+      ${issues.map((issue, index) => `<button class="code-issue-item" data-code-issue="${index}">
+        <span class="code-issue-title">${escHtml(issue.rule_key || 'issue')}</span>
+        <span class="code-issue-meta">${escHtml(issue.severity || 'info')} · line ${fmtNum(issue.line || 1)}</span>
+        <span class="code-issue-message">${escHtml(issue.message || '')}</span>
+      </button>`).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderCodeTab() {
+  const data = state.codeTreeData;
+  if (data === null) {
+    return `<div class="loading-state"><div class="spinner"></div></div>`;
+  }
+  const items = data.items || [];
+  const snapshot = data.code_snapshot || null;
+  if (items.length === 0) {
+    return `<div class="empty-state">
+      <div class="empty-icon">{ }</div>
+      <p>No code snapshot available for the current scope.</p>
+      <p class="empty-detail">Run a new analysis on this ${state.scope.type === 'pull_request' ? 'pull request' : 'branch'} to populate code browsing.</p>
+    </div>`;
+  }
+
+  return `<div class="code-browser">
+    <aside class="code-sidebar">
+      <div class="code-sidebar-head">
+        <h3>Files</h3>
+        <p>${fmtNum(snapshot?.stored_files || items.length)} stored · ${fmtNum(snapshot?.total_files || items.length)} discovered</p>
+      </div>
+      <div class="code-tree">
+        ${items.map(item => `<button class="code-tree-item${item.path === state.codeSelectedPath ? ' active' : ''}${item.is_omitted ? ' muted' : ''}" data-code-path="${escAttr(item.path)}">
+          <span class="code-tree-path mono">${escHtml(item.path)}</span>
+          <span class="code-tree-meta">${fmtNum(item.line_count || 0)} lines${item.is_truncated ? ' · truncated' : ''}${item.is_omitted ? ' · omitted' : ''}</span>
+        </button>`).join('')}
+      </div>
+    </aside>
+    <section class="code-viewer">${renderCodeViewer()}</section>
+  </div>`;
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
@@ -563,17 +1117,19 @@ async function loadIssues(append) {
   renderIssuesSection();
 
   const f      = state.issueFilter;
-  const scanId  = state.currentScan?.id;
-  let qs = scanId
-    ? `scan_id=${scanId}&limit=${ISSUE_PAGE}&offset=${state.issueOffset}`
-    : `project_id=${p.id}&limit=${ISSUE_PAGE}&offset=${state.issueOffset}`;
-  if (f.severity !== 'all') qs += `&severity=${encodeURIComponent(f.severity)}`;
-  if (f.type     !== 'all') qs += `&type=${encodeURIComponent(f.type)}`;
-  if (f.status   !== 'all') qs += `&status=${encodeURIComponent(f.status)}`;
-  if (f.search)             qs += `&file=${encodeURIComponent(f.search)}`;
+  const qs = new URLSearchParams({
+    project_key: p.key,
+    limit: String(ISSUE_PAGE),
+    offset: String(state.issueOffset),
+  });
+  buildScopeQuery(state.scope).forEach((value, key) => qs.set(key, value));
+  if (f.severity !== 'all') qs.set('severity', f.severity);
+  if (f.type     !== 'all') qs.set('type', f.type);
+  if (f.status   !== 'all') qs.set('status', f.status);
+  if (f.search)             qs.set('file', f.search);
 
   try {
-    const data = await apiFetch('/issues?' + qs);
+    const data = await apiFetch('/issues?' + qs.toString());
     if (append) {
       state.issues = state.issues.concat(data.items || []);
     } else {
@@ -933,7 +1489,7 @@ async function loadActivityData() {
   const p = state.currentProject;
   if (!p) return;
   try {
-    const data = await apiFetch('/projects/' + encodeURIComponent(p.key) + '/activity?limit=30');
+    const data = await apiFetch(buildScopedPath('/projects/' + encodeURIComponent(p.key) + '/activity?limit=30', state.scope));
     state.activityData = data.items || [];
   } catch { state.activityData = []; }
   render();
@@ -943,28 +1499,10 @@ async function loadActivityData() {
 
 async function switchTab(tab) {
   state.projectTab = tab;
+  syncProjectUrl(false);
   render();
-  if (tab === 'issues') {
-    if (state.issues.length === 0 && !state.loadingIssues) {
-      await loadIssues();
-    } else {
-      renderIssuesSection();
-    }
-    return;
-  }
-  if (tab === 'activity' && state.activityData === null) {
-    await loadActivityData(); return;
-  }
-  if (tab === 'gate' && state.gateData === null) {
-    await loadGateData(); return;
-  }
-  if (tab === 'webhooks' && state.webhooksData === null) {
-    await loadWebhooksData(); return;
-  }
-  if (tab === 'profiles' && state.profilesData === null) {
-    await loadProfilesData(); return;
-  }
-  bindTabContent();
+  await ensureProjectTabLoaded(tab);
+  if (tab === 'issues' && state.issues.length > 0) renderIssuesSection();
 }
 
 // ── Gate tab ──────────────────────────────────────────────────────────────────
@@ -975,7 +1513,6 @@ async function loadGateData() {
     state.gateData = data.items || (Array.isArray(data) ? data : []);
   } catch { state.gateData = []; }
   render();
-  bindTabContent();
 }
 
 function renderGateTab() {
@@ -1019,7 +1556,6 @@ async function loadWebhooksData() {
     state.newCodePeriod = await apiFetch('/projects/' + encodeURIComponent(p.key) + '/new-code-period');
   } catch { state.newCodePeriod = null; }
   render();
-  bindTabContent();
 }
 
 function renderWebhooksTab() {
@@ -1086,7 +1622,6 @@ async function loadProfilesData() {
     state.profilesData = data.items || (Array.isArray(data) ? data : []);
   } catch { state.profilesData = []; }
   render();
-  bindTabContent();
 }
 
 function renderProfilesTab() {
@@ -1132,6 +1667,64 @@ function renderProfilesTab() {
 function bindTabContent() {
   const p = state.currentProject;
   if (!p) return;
+
+  const branchSelect = document.getElementById('scopeBranchSelect');
+  if (branchSelect) {
+    branchSelect.value = state.scope.type === 'branch' ? resolvedBranchName(state.scope) : resolvedBranchName({ type: 'branch', branch: state.scope.defaultBranch, defaultBranch: state.scope.defaultBranch });
+    branchSelect.addEventListener('change', () => {
+      changeScope({ type: 'branch', branch: branchSelect.value, defaultBranch: state.scope.defaultBranch });
+    });
+  }
+
+  const prSelect = document.getElementById('scopePullRequestSelect');
+  if (prSelect) {
+    prSelect.value = state.scope.type === 'pull_request' ? state.scope.pullRequestKey : '';
+    prSelect.addEventListener('change', () => {
+      if (!prSelect.value) {
+        changeScope({ type: 'branch', branch: branchSelect?.value || resolvedBranchName(state.scope), defaultBranch: state.scope.defaultBranch });
+        return;
+      }
+      const selected = (state.pullRequestsData || []).find(item => item.key === prSelect.value);
+      changeScope({
+        type: 'pull_request',
+        pullRequestKey: prSelect.value,
+        branch: selected?.branch || '',
+        pullRequestBase: selected?.base_branch || '',
+        defaultBranch: state.scope.defaultBranch,
+      });
+    });
+  }
+
+  document.querySelectorAll('[data-branch-card]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      changeScope({ type: 'branch', branch: btn.dataset.branchCard, defaultBranch: state.scope.defaultBranch });
+    });
+  });
+
+  document.querySelectorAll('[data-pr-card]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      changeScope({
+        type: 'pull_request',
+        pullRequestKey: btn.dataset.prCard,
+        branch: btn.dataset.prBranch || '',
+        pullRequestBase: btn.dataset.prBase || '',
+        defaultBranch: state.scope.defaultBranch,
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-code-path]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      loadCodeFileData(btn.dataset.codePath);
+    });
+  });
+
+  document.querySelectorAll('[data-code-issue]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const issue = state.codeFileData?.issues?.[Number(btn.dataset.codeIssue)];
+      if (issue) openIssueDetail(issue);
+    });
+  });
 
   // Gate tab
   document.querySelectorAll('.expand-gate-btn').forEach(btn => {
@@ -1273,7 +1866,7 @@ function bindMain() {
   document.getElementById('logoutBtn')?.addEventListener('click', logout);
   document.getElementById('backBtn')?.addEventListener('click', () => loadProjects());
   document.querySelectorAll('.project-card').forEach(card => {
-    card.addEventListener('click', () => loadProject(card.dataset.key));
+    card.addEventListener('click', () => loadProject(card.dataset.key, { project: card.dataset.key, tab: 'overview', branch: '', pullRequest: '' }));
   });
   if (state.view === 'project') {
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1310,19 +1903,22 @@ function bindMain() {
       });
     });
 
-    if (state.projectTab !== 'overview' && state.projectTab !== 'issues') bindTabContent();
+    bindTabContent();
   }
 }
 
 function logout() {
   clearStorage();
+  history.replaceState({}, '', globalThis.location.pathname);
   state = {
     user: null, view: 'login', projects: [], currentProject: null, currentScan: null,
-    overviewData: null, issues: [], issuesTotal: 0, issueOffset: 0,
+    scope: emptyScope(), overviewData: null, issues: [], issuesTotal: 0, issueOffset: 0,
     issueFilter: { severity: 'all', type: 'all', status: 'all', search: '' },
     loading: false, loadingIssues: false,
     projectTab: 'overview', gateData: null, webhooksData: null, profilesData: null,
-    activityData: null, newCodePeriod: null, selectedIssue: null,
+    activityData: null, branchesData: null, pullRequestsData: null,
+    projectInfoData: null, codeTreeData: null, codeFileData: null, codeSelectedPath: '',
+    newCodePeriod: null, selectedIssue: null,
   };
   render();
 }
@@ -1352,10 +1948,25 @@ function escAttr(s) { return escHtml(s); }
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function init() {
+  window.addEventListener('popstate', async () => {
+    if (!getToken()) return;
+    const route = parseProjectRoute();
+    if (route.project) {
+      await loadProject(route.project, route);
+      return;
+    }
+    await loadProjects();
+  });
+
   const t = getToken();
   if (t) {
     state.user = loadUser();
-    await loadProjects();
+    const route = parseProjectRoute();
+    if (route.project) {
+      await loadProject(route.project, route);
+    } else {
+      await loadProjects();
+    }
   } else {
     render();
   }

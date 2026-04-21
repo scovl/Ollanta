@@ -6,6 +6,7 @@ package ingest
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/scovl/ollanta/domain/model"
@@ -15,10 +16,15 @@ import (
 
 // IngestMetadata mirrors the Metadata field of report.Report for JSON decoding.
 type IngestMetadata struct {
-	ProjectKey   string `json:"project_key"`
-	AnalysisDate string `json:"analysis_date"` // RFC 3339
-	Version      string `json:"version"`
-	ElapsedMs    int64  `json:"elapsed_ms"`
+	ProjectKey      string `json:"project_key"`
+	AnalysisDate    string `json:"analysis_date"` // RFC 3339
+	Version         string `json:"version"`
+	ElapsedMs       int64  `json:"elapsed_ms"`
+	ScopeType       string `json:"scope_type,omitempty"`
+	Branch          string `json:"branch,omitempty"`
+	CommitSHA       string `json:"commit_sha,omitempty"`
+	PullRequestKey  string `json:"pull_request_key,omitempty"`
+	PullRequestBase string `json:"pull_request_base,omitempty"`
 }
 
 // IngestMeasures mirrors the Measures field of report.Report for JSON decoding.
@@ -36,9 +42,10 @@ type IngestMeasures struct {
 // IngestRequest is the payload accepted by POST /api/v1/scans.
 // Its JSON shape is identical to the report.json produced by ollantascanner.
 type IngestRequest struct {
-	Metadata IngestMetadata `json:"metadata"`
-	Measures IngestMeasures `json:"measures"`
-	Issues   []*model.Issue `json:"issues"`
+	Metadata     IngestMetadata      `json:"metadata"`
+	Measures     IngestMeasures      `json:"measures"`
+	Issues       []*model.Issue      `json:"issues"`
+	CodeSnapshot *model.CodeSnapshot `json:"code_snapshot,omitempty"`
 }
 
 // IngestResult is the response returned after a successful ingest.
@@ -71,6 +78,7 @@ type IngestUseCase struct {
 	scans    port.IScanRepo
 	issues   port.IIssueRepo
 	measures port.IMeasureRepo
+	snapshots port.ICodeSnapshotRepo
 	indexer  ISearchEnqueuer    // optional — nil disables search indexing
 	webhooks IWebhookDispatcher // optional — nil disables webhook dispatch
 }
@@ -82,6 +90,7 @@ func NewIngestUseCase(
 	scans port.IScanRepo,
 	issues port.IIssueRepo,
 	measures port.IMeasureRepo,
+	snapshots port.ICodeSnapshotRepo,
 	indexer ISearchEnqueuer,
 	webhooks IWebhookDispatcher,
 ) *IngestUseCase {
@@ -90,9 +99,35 @@ func NewIngestUseCase(
 		scans:    scans,
 		issues:   issues,
 		measures: measures,
+		snapshots: snapshots,
 		indexer:  indexer,
 		webhooks: webhooks,
 	}
+}
+
+func resolveRequestScope(meta IngestMetadata) (model.AnalysisScope, error) {
+	scope := model.AnalysisScope{
+		Type:            meta.ScopeType,
+		Branch:          meta.Branch,
+		PullRequestKey:  meta.PullRequestKey,
+		PullRequestBase: meta.PullRequestBase,
+	}.Normalize()
+	if scope.Type == model.ScopeTypePullRequest {
+		missing := make([]string, 0, 3)
+		if scope.PullRequestKey == "" {
+			missing = append(missing, "pull_request_key")
+		}
+		if scope.Branch == "" {
+			missing = append(missing, "branch")
+		}
+		if scope.PullRequestBase == "" {
+			missing = append(missing, "pull_request_base")
+		}
+		if len(missing) > 0 {
+			return model.AnalysisScope{}, fmt.Errorf("pull request scope missing %s", strings.Join(missing, ", "))
+		}
+	}
+	return scope, nil
 }
 
 // parseAnalysisDate parses an RFC 3339 string, falling back to UTC now.
@@ -132,6 +167,10 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 	if req.Metadata.ProjectKey == "" {
 		return nil, fmt.Errorf("project_key is required")
 	}
+	scope, err := resolveRequestScope(req.Metadata)
+	if err != nil {
+		return nil, err
+	}
 
 	analysisDate := parseAnalysisDate(req.Metadata.AnalysisDate)
 
@@ -149,8 +188,11 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 	// ── 2. Fetch previous scan for tracking ──────────────────────────────────
 	var prevScan *model.Scan
 	_ = pipelineSteps.fetchPrevScan.run(ctx, func(ctx context.Context) error {
-		var err error
-		prevScan, err = uc.scans.GetLatest(ctx, project.ID)
+		defaultBranch, _, err := uc.scans.ResolveDefaultBranch(ctx, project.ID, project.MainBranch)
+		if err != nil {
+			return err
+		}
+		prevScan, err = uc.scans.GetLatestInScope(ctx, project.ID, scope, defaultBranch)
 		return err
 	})
 
@@ -174,6 +216,11 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 	scan := &model.Scan{
 		ProjectID:            project.ID,
 		Version:              req.Metadata.Version,
+		ScopeType:            scope.Type,
+		Branch:               scope.Branch,
+		CommitSHA:            req.Metadata.CommitSHA,
+		PullRequestKey:       scope.PullRequestKey,
+		PullRequestBase:      scope.PullRequestBase,
 		Status:               "completed",
 		ElapsedMs:            req.Metadata.ElapsedMs,
 		GateStatus:           gateStr,
@@ -214,7 +261,19 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 		return nil, fmt.Errorf("bulk insert measures: %w", err)
 	}
 
-	// ── 8. Async: enqueue search indexing ────────────────────────────────────
+	// ── 8. Persist latest code snapshot for the scope ───────────────────────
+	if uc.snapshots != nil && req.CodeSnapshot != nil {
+		if err := uc.snapshots.Replace(ctx, &model.CodeSnapshotState{
+			ProjectID: project.ID,
+			ScanID:    scan.ID,
+			Scope:     scope,
+			Snapshot:  *req.CodeSnapshot,
+		}); err != nil {
+			return nil, fmt.Errorf("persist code snapshot: %w", err)
+		}
+	}
+
+	// ── 9. Async: enqueue search indexing ────────────────────────────────────
 	if uc.indexer != nil {
 		_ = pipelineSteps.indexSearch.run(ctx, func(_ context.Context) error {
 			uc.indexer.Enqueue(scan.ID, project.ID, project.Key)
@@ -222,7 +281,7 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 		})
 	}
 
-	// ── 9. Fire webhooks ─────────────────────────────────────────────────────
+	// ── 10. Fire webhooks ────────────────────────────────────────────────────
 	if uc.webhooks != nil {
 		_ = pipelineSteps.fireWebhooks.run(ctx, func(ctx context.Context) error {
 			return uc.webhooks.Dispatch(ctx, project.ID, scan.ID, "scan.completed")

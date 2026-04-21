@@ -58,8 +58,12 @@ func (h *ScansHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // ListByProject handles GET /api/v1/projects/{key}/scans.
 func (h *ScansHandler) ListByProject(w http.ResponseWriter, r *http.Request) {
-	key := routeParam(r, "key")
-	project, err := h.projects.GetByKey(r.Context(), key)
+	requested, err := parseScopeQuery(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	resolved, err := resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
 	if errors.Is(err, postgres.ErrNotFound) {
 		jsonError(w, http.StatusNotFound, "project not found")
 		return
@@ -75,23 +79,37 @@ func (h *ScansHandler) ListByProject(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	scans, total, err := h.scans.ListByProject(r.Context(), project.ID, limit, offset)
+	items, err := h.scans.ListByProjectInScope(r.Context(), resolved.Project.ID, resolved.Scope, resolved.DefaultBranch)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total := len(items)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	scans := items[offset:end]
 	jsonOK(w, http.StatusOK, map[string]interface{}{
 		"items":  scans,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
+		"scope":  toScopeResponse(resolved),
 	})
 }
 
 // Latest handles GET /api/v1/projects/{key}/scans/latest.
 func (h *ScansHandler) Latest(w http.ResponseWriter, r *http.Request) {
-	key := routeParam(r, "key")
-	project, err := h.projects.GetByKey(r.Context(), key)
+	requested, err := parseScopeQuery(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	resolved, err := resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
 	if errors.Is(err, postgres.ErrNotFound) {
 		jsonError(w, http.StatusNotFound, "project not found")
 		return
@@ -100,7 +118,7 @@ func (h *ScansHandler) Latest(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	scan, err := h.scans.GetLatest(r.Context(), project.ID)
+	scan, err := h.scans.GetLatestInScope(r.Context(), resolved.Project.ID, resolved.Scope, resolved.DefaultBranch)
 	if errors.Is(err, postgres.ErrNotFound) {
 		jsonError(w, http.StatusNotFound, "no scans for project")
 		return

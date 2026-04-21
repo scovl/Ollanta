@@ -198,6 +198,23 @@ Posts the report to the ollantaweb API. Exits with code 1 if the quality gate fa
 | `-port`         | `7777`       | Port for `-serve` |
 | `-bind`         | `127.0.0.1`  | Bind address for `-serve` (use `0.0.0.0` in Docker) |
 | `-server`       | *(none)*     | URL of ollantaweb server to push results to |
+| `-branch`       | *(auto)*     | Explicit branch name for the analysis scope |
+| `-commit-sha`   | *(auto)*     | Explicit commit SHA stored with the scan |
+| `-pull-request-key` | *(auto)* | Pull request identifier for pull-request analysis mode |
+| `-pull-request-branch` | *(auto)* | Source branch associated with the pull request |
+| `-pull-request-base` | *(auto)* | Target branch associated with the pull request |
+
+### Branch and pull request analysis
+
+Ollanta now tracks scan state per analysis scope instead of flattening everything into one project timeline.
+
+- Branch mode uses `-branch` when provided, otherwise it auto-detects the Git branch for `-project-dir`.
+- Pull request mode is enabled when `-pull-request-key`, `-pull-request-branch`, and `-pull-request-base` are present, whether from flags or CI metadata.
+- Supported CI pull-request environments are `OLLANTA_PULL_REQUEST_*`, GitHub Actions, GitLab CI, and Azure Pipelines.
+- Detached HEAD executions fail fast unless `-branch` is provided explicitly.
+- On the server, blank historic branch values remain visible through the resolved default branch for backward compatibility.
+- Each successful ingest replaces the latest code snapshot for that branch or pull request scope. The web UI exposes that data through the `Branches`, `Pull Requests`, `Code`, and `Project Information` views.
+- Snapshot storage is bounded to `128 KB` per file and `4 MB` total per scope. Truncated or omitted files are reported in the snapshot metadata.
 
 ### Output formats
 
@@ -281,6 +298,16 @@ OLLANTA_SERVER=http://your-server:8080 docker compose --profile push run --build
 ## Server API (ollantaweb)
 
 Full REST API reference at [docs/api.md](docs/api.md). All `/api/v1` routes require a `Bearer` token or API token (`olt_…`) in the `Authorization` header.
+
+## Rollout guidance for existing projects
+
+When enabling branch and pull request analysis on a project that already has historic scans:
+
+1. Set `main_branch` on the project if the default branch is not `main` or `master`.
+2. Run a fresh analysis on the default branch so the server establishes the current baseline and code snapshot for that scope.
+3. Update CI pull-request jobs to pass explicit flags or expose supported CI environment variables.
+4. For detached HEAD runners, always provide `-branch` so the scanner can resolve branch scope deterministically.
+5. Historic scans with blank branch values continue to appear on the resolved default branch, so migration is backward-compatible.
 
 ---
 

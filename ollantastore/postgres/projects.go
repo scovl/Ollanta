@@ -15,6 +15,7 @@ type Project struct {
 	Key         string    `json:"key"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	MainBranch  string    `json:"main_branch"`
 	Tags        []string  `json:"tags"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -40,15 +41,16 @@ func (r *ProjectRepository) Upsert(ctx context.Context, p *Project) error {
 		p.Tags = []string{}
 	}
 	row := r.db.Pool.QueryRow(ctx, `
-		INSERT INTO projects (key, name, description, tags, updated_at)
-		VALUES ($1, $2, $3, $4, now())
+		INSERT INTO projects (key, name, description, main_branch, tags, updated_at)
+		VALUES ($1, $2, $3, $4, $5, now())
 		ON CONFLICT (key) DO UPDATE
 		  SET name        = EXCLUDED.name,
 		      description = EXCLUDED.description,
+		      main_branch = EXCLUDED.main_branch,
 		      tags        = EXCLUDED.tags,
 		      updated_at  = now()
 		RETURNING id, created_at, updated_at`,
-		p.Key, p.Name, p.Description, p.Tags,
+		p.Key, p.Name, p.Description, p.MainBranch, p.Tags,
 	)
 	return row.Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 }
@@ -59,10 +61,10 @@ func (r *ProjectRepository) Create(ctx context.Context, p *Project) error {
 		p.Tags = []string{}
 	}
 	row := r.db.Pool.QueryRow(ctx, `
-		INSERT INTO projects (key, name, description, tags)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO projects (key, name, description, main_branch, tags)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at, updated_at`,
-		p.Key, p.Name, p.Description, p.Tags,
+		p.Key, p.Name, p.Description, p.MainBranch, p.Tags,
 	)
 	return row.Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 }
@@ -71,9 +73,9 @@ func (r *ProjectRepository) Create(ctx context.Context, p *Project) error {
 func (r *ProjectRepository) GetByKey(ctx context.Context, key string) (*Project, error) {
 	p := &Project{}
 	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id, key, name, description, tags, created_at, updated_at
+		SELECT id, key, name, description, main_branch, tags, created_at, updated_at
 		FROM projects WHERE key = $1`, key,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Description, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Description, &p.MainBranch, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -84,9 +86,9 @@ func (r *ProjectRepository) GetByKey(ctx context.Context, key string) (*Project,
 func (r *ProjectRepository) GetByID(ctx context.Context, id int64) (*Project, error) {
 	p := &Project{}
 	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id, key, name, description, tags, created_at, updated_at
+		SELECT id, key, name, description, main_branch, tags, created_at, updated_at
 		FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Description, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Description, &p.MainBranch, &p.Tags, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -105,7 +107,7 @@ func (r *ProjectRepository) List(ctx context.Context, limit, offset int) ([]*Pro
 	}
 
 	rows, err := r.db.Pool.Query(ctx, `
-		SELECT id, key, name, description, tags, created_at, updated_at
+		SELECT id, key, name, description, main_branch, tags, created_at, updated_at
 		FROM projects
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2`, limit, offset,
@@ -118,7 +120,7 @@ func (r *ProjectRepository) List(ctx context.Context, limit, offset int) ([]*Pro
 	var projects []*Project
 	for rows.Next() {
 		p := &Project{}
-		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Description,
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Description, &p.MainBranch,
 			&p.Tags, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, 0, err
 		}

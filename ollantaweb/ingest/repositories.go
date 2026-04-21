@@ -17,6 +17,7 @@ var _ port.IScanRepo = (*scanRepoAdapter)(nil)
 var _ port.IScanJobRepo = (*scanJobRepoAdapter)(nil)
 var _ port.IIssueRepo = (*issueRepoAdapter)(nil)
 var _ port.IMeasureRepo = (*measureRepoAdapter)(nil)
+var _ port.ICodeSnapshotRepo = (*codeSnapshotRepoAdapter)(nil)
 
 type projectRepoAdapter struct {
 	inner *postgres.ProjectRepository
@@ -115,6 +116,14 @@ func (a *scanRepoAdapter) GetLatest(ctx context.Context, projectID int64) (*mode
 	return toDomainScan(scan), nil
 }
 
+func (a *scanRepoAdapter) GetLatestInScope(ctx context.Context, projectID int64, scope model.AnalysisScope, defaultBranch string) (*model.Scan, error) {
+	scan, err := a.inner.GetLatestInScope(ctx, projectID, scope, defaultBranch)
+	if err != nil {
+		return nil, mapStoreErr(err)
+	}
+	return toDomainScan(scan), nil
+}
+
 func (a *scanRepoAdapter) ListByProject(ctx context.Context, projectID int64) ([]*model.Scan, error) {
 	var out []*model.Scan
 	total := 1
@@ -135,6 +144,26 @@ func (a *scanRepoAdapter) ListByProject(ctx context.Context, projectID int64) ([
 		out = []*model.Scan{}
 	}
 	return out, nil
+}
+
+func (a *scanRepoAdapter) ListByProjectInScope(ctx context.Context, projectID int64, scope model.AnalysisScope, defaultBranch string) ([]*model.Scan, error) {
+	items, err := a.inner.ListByProjectInScope(ctx, projectID, scope, defaultBranch)
+	if err != nil {
+		return nil, mapStoreErr(err)
+	}
+	out := make([]*model.Scan, 0, len(items))
+	for _, item := range items {
+		out = append(out, toDomainScan(item))
+	}
+	if out == nil {
+		out = []*model.Scan{}
+	}
+	return out, nil
+}
+
+func (a *scanRepoAdapter) ResolveDefaultBranch(ctx context.Context, projectID int64, configured string) (string, bool, error) {
+	branch, inferred, err := a.inner.ResolveDefaultBranch(ctx, projectID, configured)
+	return branch, inferred, mapStoreErr(err)
 }
 
 type scanJobRepoAdapter struct {
@@ -230,6 +259,14 @@ type measureRepoAdapter struct {
 	inner *postgres.MeasureRepository
 }
 
+type codeSnapshotRepoAdapter struct {
+	inner *postgres.CodeSnapshotRepository
+}
+
+func (a *codeSnapshotRepoAdapter) Replace(ctx context.Context, state *model.CodeSnapshotState) error {
+	return mapStoreErr(a.inner.Replace(ctx, state))
+}
+
 func (a *measureRepoAdapter) BulkInsert(ctx context.Context, measures []model.MeasureRow) error {
 	rows := make([]postgres.MeasureRow, len(measures))
 	for i := range measures {
@@ -277,6 +314,7 @@ func toDomainProject(project *postgres.Project) *model.Project {
 		Key:         project.Key,
 		Name:        project.Name,
 		Description: project.Description,
+		MainBranch:  project.MainBranch,
 		Tags:        project.Tags,
 		CreatedAt:   project.CreatedAt,
 		UpdatedAt:   project.UpdatedAt,
@@ -292,6 +330,7 @@ func toStoreProject(project *model.Project) *postgres.Project {
 		Key:         project.Key,
 		Name:        project.Name,
 		Description: project.Description,
+		MainBranch:  project.MainBranch,
 		Tags:        project.Tags,
 		CreatedAt:   project.CreatedAt,
 		UpdatedAt:   project.UpdatedAt,
@@ -306,6 +345,7 @@ func copyProjectFromStore(dst *model.Project, src *postgres.Project) {
 	dst.Key = src.Key
 	dst.Name = src.Name
 	dst.Description = src.Description
+	dst.MainBranch = src.MainBranch
 	dst.Tags = src.Tags
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
@@ -319,8 +359,11 @@ func toDomainScan(scan *postgres.Scan) *model.Scan {
 		ID:                   scan.ID,
 		ProjectID:            scan.ProjectID,
 		Version:              scan.Version,
+		ScopeType:            scan.ScopeType,
 		Branch:               scan.Branch,
 		CommitSHA:            scan.CommitSHA,
+		PullRequestKey:       scan.PullRequestKey,
+		PullRequestBase:      scan.PullRequestBase,
 		Status:               scan.Status,
 		ElapsedMs:            scan.ElapsedMs,
 		GateStatus:           scan.GateStatus,
@@ -347,8 +390,11 @@ func toStoreScan(scan *model.Scan) *postgres.Scan {
 		ID:                   scan.ID,
 		ProjectID:            scan.ProjectID,
 		Version:              scan.Version,
+		ScopeType:            scan.ScopeType,
 		Branch:               scan.Branch,
 		CommitSHA:            scan.CommitSHA,
+		PullRequestKey:       scan.PullRequestKey,
+		PullRequestBase:      scan.PullRequestBase,
 		Status:               scan.Status,
 		ElapsedMs:            scan.ElapsedMs,
 		GateStatus:           scan.GateStatus,
@@ -429,8 +475,11 @@ func copyScanFromStore(dst *model.Scan, src *postgres.Scan) {
 	dst.ID = src.ID
 	dst.ProjectID = src.ProjectID
 	dst.Version = src.Version
+	dst.ScopeType = src.ScopeType
 	dst.Branch = src.Branch
 	dst.CommitSHA = src.CommitSHA
+	dst.PullRequestKey = src.PullRequestKey
+	dst.PullRequestBase = src.PullRequestBase
 	dst.Status = src.Status
 	dst.ElapsedMs = src.ElapsedMs
 	dst.GateStatus = src.GateStatus
