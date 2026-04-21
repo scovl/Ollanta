@@ -58,7 +58,9 @@ This builds the scanner image, scans the mounted project directory, and serves t
 docker compose --profile server up -d
 ```
 
-This starts PostgreSQL, ZincSearch, and `ollantaweb` on port `8080`.
+This starts PostgreSQL, ZincSearch, the `ollantaweb` API on port `8080`, plus three background roles: `ollantaworker` for scan compute, `ollantaindexer` for durable search projection, and `ollantawebhookworker` for durable webhook delivery.
+
+If you want scanner push to wait for the final server-side result instead of stopping at `202 Accepted`, use `-server-wait` in the CLI. In Docker Compose, the `push` service can be toggled with `OLLANTA_SERVER_WAIT=true`.
 
 ---
 
@@ -235,7 +237,7 @@ docker compose up -d --build --force-recreate serve
 
 ### Centralized server stack
 
-Start PostgreSQL, ZincSearch, and the ollantaweb API server:
+Start PostgreSQL, ZincSearch, the ollantaweb API server, and the three background roles for compute, index projection, and webhook delivery:
 
 ```sh
 docker compose --profile server up -d
@@ -250,7 +252,7 @@ ollanta -project-dir . -project-key my-project -server http://your-server:8080
 Or via Docker:
 
 ```sh
-OLLANTA_SERVER=http://your-server:8080 docker compose --profile push run --rm push
+OLLANTA_SERVER=http://your-server:8080 docker compose --profile push run --build --rm push
 ```
 
 ### Environment variables

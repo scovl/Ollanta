@@ -1,6 +1,6 @@
 # Running Ollanta on Kubernetes
 
-This guide covers deploying the **ollantaweb** server stack on Kubernetes. The architecture is designed for cloud-native operation: stateless app pods, externalized state, and independent scaling of every component.
+This guide covers deploying the Ollanta server stack on Kubernetes. The architecture is designed for cloud-native operation: stateless web and compute pods, externalized state, and independent scaling of every component.
 
 ---
 
@@ -11,8 +11,8 @@ This guide covers deploying the **ollantaweb** server stack on Kubernetes. The a
 | **Resilient** | Graceful shutdown (SIGTERM + 15 s drain), liveness and readiness probes, degraded mode when search is down |
 | **Customizable** | 100 % env-var driven config, pluggable search backend (`zincsearch` / `postgres`) |
 | **Atomic** | Distroless nonroot image, static Go binary, no shell, minimal attack surface |
-| **Scalable** | Stateless app pods behind a Service, ZincSearch scaled independently, local indexing worker per replica |
-| **Ephemeral** | Zero local volumes on app pods, auto-migration on boot, indexes rebuilt from PostgreSQL on demand |
+| **Scalable** | Stateless web pods behind a Service, separate compute, index, and webhook worker deployments, ZincSearch scaled independently |
+| **Ephemeral** | Zero local volumes on web and worker pods, auto-migration on boot, indexes rebuilt from PostgreSQL on demand |
 
 ---
 
@@ -23,19 +23,35 @@ This guide covers deploying the **ollantaweb** server stack on Kubernetes. The a
                     │   Ingress / LB     │
                     └─────────┬──────────┘
                               │
-                   ┌──────────▼──────────┐
-                   │   ollantaweb (HPA)  │   Deployment  ×N
-                   │   stateless pods    │   port 8080
-                   └───┬────────────┬────┘
-                       │            │
-            ┌──────────▼──┐  ┌─────▼───────────┐
-            │  PostgreSQL  │  │   ZincSearch     │
-            │  StatefulSet │  │   Deployment     │
-            │  + PVC       │  │   + PVC          │
-            └──────────────┘  └─────────────────┘
+                    ┌──────────▼──────────┐
+                    │   ollantaweb (HPA)  │   Deployment ×N
+                    │   web / query role  │   port 8080
+                    └───┬────────────┬────┘
+                        │            │
+                        │            └──────────────────────────────┐
+                        │                                           │
+                    ┌────────▼─────┐                              ┌──────▼─────────┐
+                    │ PostgreSQL    │                              │ ollantaworker  │
+                    │ StatefulSet   │                              │ compute role   │
+                    │ + PVC         │                              │ Deployment ×N  │
+                    └──────┬────────┘                              └──────┬─────────┘
+                      │                                              │
+                      │                            emits durable jobs │
+                      │                                              │
+                      ┌─────────▼─────────┐                         ┌──────────▼──────────┐
+                      │  ollantaindexer    │                         │ ollantawebhookworker│
+                      │  projection role   │                         │ notification role   │
+                      │  Deployment ×N     │                         │ Deployment ×N       │
+                      └─────────┬──────────┘                         └─────────────────────┘
+                      │
+                    ┌──────▼───────┐
+                    │  ZincSearch   │
+                    │  Deployment   │
+                    │  + PVC        │
+                    └───────────────┘
 ```
 
-Each component is a **separate workload** with its own scaling policy. Unlike SonarQube (where Elasticsearch is embedded in the Compute Engine process), ZincSearch is fully external — connected over HTTP, addressed by a Kubernetes Service name.
+              Each component is a separate workload with its own scaling policy. The web role accepts and serves API traffic, the compute role materializes scans and emits durable side-effect jobs, the indexer projects searchable state into ZincSearch, and the webhook worker handles external delivery retry loops. Unlike SonarQube (where Elasticsearch is embedded in the Compute Engine process), ZincSearch is fully external and addressed over HTTP.
 
 ---
 

@@ -3,7 +3,7 @@
 All `/api/v1` routes (except auth) require authentication.
 
 - Most routes expect a `Bearer` token or an API token (`olt_…`) in the `Authorization` header
-- `POST /api/v1/scans` also accepts the shared scanner token configured through `OLLANTA_SCANNER_TOKEN`
+- `POST /api/v1/scans` and `GET /api/v1/scan-jobs/{id}` also accept the shared scanner token configured through `OLLANTA_SCANNER_TOKEN`
 
 This document covers the centralized `ollantaweb` API. The scanner-local UI on port `7777` has its own embedded endpoints for browser use, such as rule lookup and local `Fix with AI` preview/apply actions.
 
@@ -40,7 +40,8 @@ docker compose --profile server up -d
 | GET    | `/api/v1/projects`                        | List projects |
 | GET    | `/api/v1/projects/{key}`                  | Get project by key |
 | DELETE | `/api/v1/projects/{key}`                  | Delete project |
-| POST   | `/api/v1/scans`                           | Ingest a scan report |
+| POST   | `/api/v1/scans`                           | Accept a scan report for asynchronous processing |
+| GET    | `/api/v1/scan-jobs/{id}`                  | Get durable scan-job status |
 | GET    | `/api/v1/scans/{id}`                      | Get scan by ID |
 | GET    | `/api/v1/projects/{key}/scans`            | List scans for project |
 | GET    | `/api/v1/projects/{key}/scans/latest`     | Latest scan for project |
@@ -48,6 +49,10 @@ docker compose --profile server up -d
 | GET    | `/api/v1/issues/facets`                   | Issue distribution facets |
 | GET    | `/api/v1/projects/{key}/measures/trend`   | Metric trend over time |
 | GET    | `/api/v1/search`                          | Full-text search (ZincSearch / Postgres FTS) |
+| GET    | `/api/v1/admin/index-jobs`                | List durable search-index jobs |
+| POST   | `/api/v1/admin/index-jobs/{id}/retry`     | Retry a failed search-index job |
+| GET    | `/api/v1/admin/webhook-jobs`              | List durable webhook delivery jobs |
+| POST   | `/api/v1/admin/webhook-jobs/{id}/retry`   | Retry a failed webhook job |
 | POST   | `/admin/reindex`                          | Rebuild search indexes from PostgreSQL |
 
 ### Scanner ingestion authentication
@@ -58,10 +63,37 @@ The scanner push workflow can authenticate without a user account by sharing a p
 export OLLANTA_SCANNER_TOKEN=ollanta-dev-scanner-token
 export OLLANTA_TOKEN=ollanta-dev-scanner-token
 docker compose --profile server up -d
-docker compose --profile push run --rm push
+docker compose --profile push run --build --rm push
 ```
 
 If `OLLANTA_SCANNER_TOKEN` is empty on the server, ingestion falls back to regular token-based authentication.
+
+### Asynchronous scan intake
+
+`POST /api/v1/scans` now returns `202 Accepted` after the report is durably stored as a `scan_job`.
+
+Typical flow:
+
+1. Submit `report.json` to `POST /api/v1/scans`.
+2. Read the returned `id` and `status` fields from the accepted scan job.
+3. Poll `GET /api/v1/scan-jobs/{id}` until the job becomes `completed` or `failed`.
+4. Once completed, use `scan_id` to query `/api/v1/scans/{id}` or the project scan-history endpoints.
+
+The scanner CLI can perform this polling automatically with:
+
+```sh
+ollanta -project-dir . -server http://localhost:8080 -server-token ollanta-dev-scanner-token -server-wait
+```
+
+Useful flags:
+
+- `-server-wait`: wait for the accepted scan job to finish
+- `-server-wait-timeout=10m`: fail if the job does not finish in time
+- `-server-wait-poll=2s`: polling interval while waiting
+
+### Durable side-effect inspection
+
+Search indexing and webhook deliveries now run through durable PostgreSQL-backed job tables and dedicated worker processes. Administrators can inspect and retry failed outbox work through the `/api/v1/admin/index-jobs` and `/api/v1/admin/webhook-jobs` endpoints.
 
 ## Users, Groups & Permissions
 
