@@ -21,6 +21,8 @@ COPY domain/go.mod      domain/go.sum*      ./domain/
 RUN go work sync || true
 
 # Copy only the modules ollantaweb needs (no CGO, no tree-sitter).
+COPY application/  ./application/
+COPY domain/       ./domain/
 COPY ollantacore/   ./ollantacore/
 COPY ollantaengine/ ./ollantaengine/
 COPY ollantastore/  ./ollantastore/
