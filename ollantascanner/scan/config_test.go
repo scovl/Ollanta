@@ -66,3 +66,22 @@ port = 9090
 		t.Fatalf("expected explicit flags to win, got %+v", opts)
 	}
 }
+
+func TestParseFlags_UsesSharedServerURLWhenScannerServerMissing(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "ollanta.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[server]
+host = "localhost"
+port = 9091
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, err := scan.ParseFlags([]string{"-config", configPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Server != "http://localhost:9091" {
+		t.Fatalf("expected shared server url, got %q", opts.Server)
+	}
+}

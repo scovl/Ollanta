@@ -1,5 +1,5 @@
-# Backward-compatible localhost alias for the shared local config.
-# Prefer config/config.toml for new setups.
+# Shared local development configuration for Ollanta.
+# Scanner CLI flags and OLLANTA_* environment variables still override these values.
 
 [scanner]
 project_dir = "."
@@ -9,18 +9,19 @@ format = "all"
 serve = true
 bind = "127.0.0.1"
 port = 7777
-server = "http://localhost:8080"
 server_token = "ollanta-dev-scanner-token"
 server_wait = false
 server_wait_timeout = "10m"
 server_wait_poll = "2s"
 
 [server]
-addr = ":8080"
+# Internal listen address for ollantaweb.
 host = "0.0.0.0"
 port = 8080
+
+# External/local URL used by the scanner when pushing to the centralized API.
 public_url = "http://localhost:8080"
-database_url = "postgres://ollanta:ollanta_dev@localhost:5432/ollanta?sslmode=disable"
+
 search_backend = "zincsearch"
 log_level = "info"
 scanner_token = "ollanta-dev-scanner-token"
@@ -42,7 +43,14 @@ port = 4080
 user = "admin"
 password = "ollanta_dev"
 
-[zincsearch]
-url = "http://localhost:4080"
-user = "admin"
-password = "ollanta_dev"
+[oauth.github]
+client_id = ""
+client_secret = ""
+
+[oauth.gitlab]
+client_id = ""
+client_secret = ""
+
+[oauth.google]
+client_id = ""
+client_secret = ""

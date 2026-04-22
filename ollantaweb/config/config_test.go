@@ -72,3 +72,52 @@ log_level = "info"
 		t.Fatalf("expected environment override, got %+v", cfg)
 	}
 }
+
+func TestLoadSupportsStructuredSharedSections(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "ollanta.toml")
+	t.Setenv("OLLANTA_CONFIG_FILE", configPath)
+	if err := os.WriteFile(configPath, []byte(`
+[server]
+host = "0.0.0.0"
+port = 8181
+log_level = "debug"
+scanner_token = "scanner-token"
+
+[database]
+host = "db.internal"
+port = 5544
+name = "ollanta"
+user = "ollanta"
+password = "secret"
+sslmode = "require"
+
+[search]
+backend = "zincsearch"
+scheme = "http"
+host = "search.internal"
+port = 4180
+user = "search-user"
+password = "search-pass"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Addr != "0.0.0.0:8181" {
+		t.Fatalf("unexpected addr: %q", cfg.Addr)
+	}
+	wantDB := "postgres://ollanta:secret@db.internal:5544/ollanta?sslmode=require"
+	if cfg.DatabaseURL != wantDB {
+		t.Fatalf("unexpected database url: %q", cfg.DatabaseURL)
+	}
+	if cfg.ZincSearchURL != "http://search.internal:4180" {
+		t.Fatalf("unexpected search url: %q", cfg.ZincSearchURL)
+	}
+	if cfg.ZincSearchUser != "search-user" || cfg.ZincSearchPassword != "search-pass" {
+		t.Fatalf("unexpected search credentials: %+v", cfg)
+	}
+}

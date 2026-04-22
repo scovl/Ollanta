@@ -38,7 +38,7 @@ For contributor workflow and module-aware validation, see [CONTRIBUTIONS.md](CON
 
 ```sh
 ollanta \
-  -config ./config/localhost.toml \
+  -config ./config/config.toml \
   -project-dir . \
   -project-key my-project \
   -format all \
@@ -67,7 +67,7 @@ This starts PostgreSQL, ZincSearch, the `ollantaweb` API on port `8080`, plus th
 
 ```sh
 ollanta \
-  -config ./config/localhost.toml \
+  -config ./config/config.toml \
   -project-dir . \
   -project-key my-project \
   -format all \
@@ -111,21 +111,24 @@ For `application/`, `domain/`, `ollantastore/`, `ollantaweb/`, and `adapter/`, u
 
 On Windows, the `Makefile` prepends `C:\msys64\mingw64\bin` to `PATH` and sets `CGO_ENABLED=1` for its own targets.
 
-## Localhost TOML Configuration
+## Shared TOML Configuration
 
-Use [config/localhost.toml](config/localhost.toml) to keep scanner, server, database, and search endpoints configurable outside hard-coded commands.
+Use [config/config.toml](config/config.toml) to centralize the local scanner UI, centralized server, database, and search/indexer settings in one place.
 
 Scanner example:
 
 ```sh
-ollanta -config ./config/localhost.toml -project-dir . -project-key my-project
+ollanta -config ./config/config.toml -project-dir . -project-key my-project
 ```
 
-Centralized server example:
+Centralized server and worker examples:
 
 ```sh
-export OLLANTA_CONFIG_FILE=$PWD/config/localhost.toml
+export OLLANTA_CONFIG_FILE=$PWD/config/config.toml
 go run ./ollantaweb/cmd/ollantaweb
+go run ./ollantaweb/cmd/ollantaworker
+go run ./ollantaweb/cmd/ollantaindexer
+go run ./ollantaweb/cmd/ollantawebhookworker
 ```
 
 Environment variables still override TOML values, and explicit scanner CLI flags override both.

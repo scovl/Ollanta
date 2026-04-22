@@ -2,7 +2,9 @@ package scan
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +57,12 @@ type scannerFileConfig struct {
 		WaitTimeout       string   `toml:"server_wait_timeout"`
 		WaitPoll          string   `toml:"server_wait_poll"`
 	} `toml:"scanner"`
+	Server struct {
+		Addr      string `toml:"addr"`
+		Host      string `toml:"host"`
+		Port      int    `toml:"port"`
+		PublicURL string `toml:"public_url"`
+	} `toml:"server"`
 }
 
 func defaultScannerFlagDefaults() scannerFlagDefaults {
@@ -125,6 +133,8 @@ func loadScannerFlagDefaults(configPath string) (scannerFlagDefaults, error) {
 	}
 	if cfg.Scanner.Server != "" {
 		defaults.Server = cfg.Scanner.Server
+	} else if serverURL := resolveScannerServerURL(cfg.Server.Addr, cfg.Server.Host, cfg.Server.Port, cfg.Server.PublicURL); serverURL != "" {
+		defaults.Server = serverURL
 	}
 	if cfg.Scanner.ServerToken != "" {
 		defaults.ServerToken = cfg.Scanner.ServerToken
@@ -165,4 +175,24 @@ func detectScannerConfigPath(args []string) string {
 		}
 	}
 	return configPath
+}
+
+func resolveScannerServerURL(addr, host string, port int, publicURL string) string {
+	if publicURL != "" {
+		return publicURL
+	}
+	if host != "" && port > 0 {
+		return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
+	}
+	if addr == "" {
+		return ""
+	}
+	resolvedHost, resolvedPort, err := net.SplitHostPort(addr)
+	if err != nil || resolvedPort == "" {
+		return ""
+	}
+	if resolvedHost == "" {
+		resolvedHost = "localhost"
+	}
+	return "http://" + net.JoinHostPort(resolvedHost, resolvedPort)
 }

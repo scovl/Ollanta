@@ -1,5 +1,5 @@
-// Package config loads ollantaweb server configuration from environment variables.
-// All fields have sensible defaults; only OLLANTA_DATABASE_URL is required.
+// Package config loads ollantaweb runtime configuration from environment variables
+// and an optional shared TOML file.
 package config
 
 import (
@@ -7,7 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -70,6 +74,9 @@ type Config struct {
 type fileConfig struct {
 	Server struct {
 		Addr              string `toml:"addr"`
+		Host              string `toml:"host"`
+		Port              int    `toml:"port"`
+		PublicURL         string `toml:"public_url"`
 		DatabaseURL       string `toml:"database_url"`
 		SearchBackend     string `toml:"search_backend"`
 		LogLevel          string `toml:"log_level"`
@@ -79,6 +86,24 @@ type fileConfig struct {
 		OAuthRedirectBase string `toml:"oauth_redirect_base"`
 		ScannerToken      string `toml:"scanner_token"`
 	} `toml:"server"`
+	Database struct {
+		URL      string `toml:"url"`
+		Host     string `toml:"host"`
+		Port     int    `toml:"port"`
+		Name     string `toml:"name"`
+		User     string `toml:"user"`
+		Password string `toml:"password"`
+		SSLMode  string `toml:"sslmode"`
+	} `toml:"database"`
+	Search struct {
+		URL      string `toml:"url"`
+		Scheme   string `toml:"scheme"`
+		Host     string `toml:"host"`
+		Port     int    `toml:"port"`
+		User     string `toml:"user"`
+		Password string `toml:"password"`
+		Backend  string `toml:"backend"`
+	} `toml:"search"`
 	ZincSearch struct {
 		URL      string `toml:"url"`
 		User     string `toml:"user"`
@@ -125,13 +150,20 @@ func Load() (*Config, error) {
 		return nil, errors.New("invalid OLLANTA_REFRESH_EXPIRY")
 	}
 
+	addr := resolveServerAddr(fileCfg.Server.Addr, fileCfg.Server.Host, fileCfg.Server.Port)
+	databaseURL := firstNonEmpty(fileCfg.Server.DatabaseURL, fileCfg.Database.URL, buildDatabaseURL(fileCfg.Database))
+	zincURL := firstNonEmpty(fileCfg.ZincSearch.URL, fileCfg.Search.URL, buildHTTPURL(fileCfg.Search.Scheme, fileCfg.Search.Host, fileCfg.Search.Port))
+	zincUser := firstNonEmpty(fileCfg.ZincSearch.User, fileCfg.Search.User)
+	zincPassword := firstNonEmpty(fileCfg.ZincSearch.Password, fileCfg.Search.Password)
+	searchBackend := firstNonEmpty(fileCfg.Server.SearchBackend, fileCfg.Search.Backend)
+
 	cfg := &Config{
-		Addr:               envOrFileOr("OLLANTA_ADDR", fileCfg.Server.Addr, ":8080"),
-		DatabaseURL:        envOrFile("OLLANTA_DATABASE_URL", fileCfg.Server.DatabaseURL),
-		ZincSearchURL:      envOrFileOr("OLLANTA_ZINCSEARCH_URL", fileCfg.ZincSearch.URL, "http://localhost:4080"),
-		ZincSearchUser:     envOrFileOr("OLLANTA_ZINCSEARCH_USER", fileCfg.ZincSearch.User, "admin"),
-		ZincSearchPassword: envOrFileOr("OLLANTA_ZINCSEARCH_PASSWORD", fileCfg.ZincSearch.Password, "admin"),
-		SearchBackend:      envOrFileOr("OLLANTA_SEARCH_BACKEND", fileCfg.Server.SearchBackend, "zincsearch"),
+		Addr:               envOrFileOr("OLLANTA_ADDR", addr, ":8080"),
+		DatabaseURL:        envOrFile("OLLANTA_DATABASE_URL", databaseURL),
+		ZincSearchURL:      envOrFileOr("OLLANTA_ZINCSEARCH_URL", zincURL, "http://localhost:4080"),
+		ZincSearchUser:     envOrFileOr("OLLANTA_ZINCSEARCH_USER", zincUser, "admin"),
+		ZincSearchPassword: envOrFileOr("OLLANTA_ZINCSEARCH_PASSWORD", zincPassword, "admin"),
+		SearchBackend:      envOrFileOr("OLLANTA_SEARCH_BACKEND", searchBackend, "zincsearch"),
 		LogLevel:           envOrFileOr("OLLANTA_LOG_LEVEL", fileCfg.Server.LogLevel, "info"),
 		JWTSecret:          jwtSecret,
 		JWTExpiry:          jwtExpiry,
@@ -198,4 +230,72 @@ func parseDuration(s string, fallback time.Duration) (time.Duration, error) {
 		return fallback, nil
 	}
 	return time.ParseDuration(s)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func resolveServerAddr(addr, host string, port int) string {
+	if strings.TrimSpace(addr) != "" {
+		return addr
+	}
+	if port <= 0 {
+		return ""
+	}
+	if strings.TrimSpace(host) == "" {
+		return ":" + strconv.Itoa(port)
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+func buildHTTPURL(scheme, host string, port int) string {
+	if strings.TrimSpace(host) == "" || port <= 0 {
+		return ""
+	}
+	if strings.TrimSpace(scheme) == "" {
+		scheme = "http"
+	}
+	return (&url.URL{
+		Scheme: scheme,
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+	}).String()
+}
+
+func buildDatabaseURL(cfg struct {
+	URL      string `toml:"url"`
+	Host     string `toml:"host"`
+	Port     int    `toml:"port"`
+	Name     string `toml:"name"`
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	SSLMode  string `toml:"sslmode"`
+}) string {
+	if strings.TrimSpace(cfg.Host) == "" || strings.TrimSpace(cfg.User) == "" || strings.TrimSpace(cfg.Name) == "" {
+		return ""
+	}
+	port := cfg.Port
+	if port <= 0 {
+		port = 5432
+	}
+	user := url.User(cfg.User)
+	if cfg.Password != "" {
+		user = url.UserPassword(cfg.User, cfg.Password)
+	}
+	sslMode := cfg.SSLMode
+	if strings.TrimSpace(sslMode) == "" {
+		sslMode = "disable"
+	}
+	return (&url.URL{
+		Scheme:   "postgres",
+		User:     user,
+		Host:     net.JoinHostPort(cfg.Host, strconv.Itoa(port)),
+		Path:     cfg.Name,
+		RawQuery: "sslmode=" + url.QueryEscape(sslMode),
+	}).String()
 }
