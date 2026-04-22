@@ -17,25 +17,25 @@ import (
 
 // ScanOptions holds every parameter that controls a scan run.
 type ScanOptions struct {
-	ProjectDir  string
-	Sources     []string // source directory patterns (Go-style ./... accepted)
-	Exclusions  []string // glob patterns relative to ProjectDir
-	ProjectKey  string
-	Branch      string
-	CommitSHA   string
-	PullRequestKey   string
+	ProjectDir        string
+	Sources           []string // source directory patterns (Go-style ./... accepted)
+	Exclusions        []string // glob patterns relative to ProjectDir
+	ProjectKey        string
+	Branch            string
+	CommitSHA         string
+	PullRequestKey    string
 	PullRequestBranch string
 	PullRequestBase   string
-	Format      string // "summary" | "json" | "sarif" | "all"
-	Debug       bool
-	Serve       bool          // open local web UI after scan
-	Port        int           // port for -serve (default 7777)
-	Bind        string        // bind address for -serve (default 127.0.0.1)
-	Server      string        // URL of ollantaweb server for push mode (empty = disabled)
-	ServerToken string        // Bearer token for authenticating with ollantaweb
-	ServerWait  bool          // wait for accepted server job until completion
-	WaitTimeout time.Duration // maximum time to wait for server-side job completion
-	WaitPoll    time.Duration // polling interval while waiting for server-side job completion
+	Format            string // "summary" | "json" | "sarif" | "all"
+	Debug             bool
+	Serve             bool          // open local web UI after scan
+	Port              int           // port for -serve (default 7777)
+	Bind              string        // bind address for -serve (default 127.0.0.1)
+	Server            string        // URL of ollantaweb server for push mode (empty = disabled)
+	ServerToken       string        // Bearer token for authenticating with ollantaweb
+	ServerWait        bool          // wait for accepted server job until completion
+	WaitTimeout       time.Duration // maximum time to wait for server-side job completion
+	WaitPoll          time.Duration // polling interval while waiting for server-side job completion
 }
 
 // ParseFlags parses args (typically os.Args[1:]) into ScanOptions.
@@ -82,22 +82,22 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 	}
 
 	opts := &ScanOptions{
-		ProjectDir:  *projectDir,
-		Branch:      *branch,
-		CommitSHA:   *commitSHA,
-		PullRequestKey: *pullRequestKey,
+		ProjectDir:        *projectDir,
+		Branch:            *branch,
+		CommitSHA:         *commitSHA,
+		PullRequestKey:    *pullRequestKey,
 		PullRequestBranch: *pullRequestBranch,
-		PullRequestBase: *pullRequestBase,
-		Format:      *format,
-		Debug:       *debug,
-		Serve:       *serve,
-		Port:        *port,
-		Bind:        *bind,
-		Server:      *serverURL,
-		ServerToken: *serverToken,
-		ServerWait:  *serverWait,
-		WaitTimeout: *waitTimeout,
-		WaitPoll:    *waitPoll,
+		PullRequestBase:   *pullRequestBase,
+		Format:            *format,
+		Debug:             *debug,
+		Serve:             *serve,
+		Port:              *port,
+		Bind:              *bind,
+		Server:            *serverURL,
+		ServerToken:       *serverToken,
+		ServerWait:        *serverWait,
+		WaitTimeout:       *waitTimeout,
+		WaitPoll:          *waitPoll,
 	}
 
 	for _, s := range strings.Split(*sources, ",") {
