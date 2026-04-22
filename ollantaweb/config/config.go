@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 // Config holds all runtime configuration for the ollantaweb server.
@@ -64,9 +67,47 @@ type Config struct {
 	ScannerToken string
 }
 
+type fileConfig struct {
+	Server struct {
+		Addr              string `toml:"addr"`
+		DatabaseURL       string `toml:"database_url"`
+		SearchBackend     string `toml:"search_backend"`
+		LogLevel          string `toml:"log_level"`
+		JWTSecret         string `toml:"jwt_secret"`
+		JWTExpiry         string `toml:"jwt_expiry"`
+		RefreshExpiry     string `toml:"refresh_expiry"`
+		OAuthRedirectBase string `toml:"oauth_redirect_base"`
+		ScannerToken      string `toml:"scanner_token"`
+	} `toml:"server"`
+	ZincSearch struct {
+		URL      string `toml:"url"`
+		User     string `toml:"user"`
+		Password string `toml:"password"`
+	} `toml:"zincsearch"`
+	OAuth struct {
+		GitHub struct {
+			ClientID     string `toml:"client_id"`
+			ClientSecret string `toml:"client_secret"`
+		} `toml:"github"`
+		GitLab struct {
+			ClientID     string `toml:"client_id"`
+			ClientSecret string `toml:"client_secret"`
+		} `toml:"gitlab"`
+		Google struct {
+			ClientID     string `toml:"client_id"`
+			ClientSecret string `toml:"client_secret"`
+		} `toml:"google"`
+	} `toml:"oauth"`
+}
+
 // Load reads configuration from environment variables and validates required fields.
 func Load() (*Config, error) {
-	jwtSecret := os.Getenv("OLLANTA_JWT_SECRET")
+	fileCfg, err := loadFileConfig(os.Getenv("OLLANTA_CONFIG_FILE"))
+	if err != nil {
+		return nil, err
+	}
+
+	jwtSecret := envOrFile("OLLANTA_JWT_SECRET", fileCfg.Server.JWTSecret)
 	if jwtSecret == "" {
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
@@ -75,34 +116,34 @@ func Load() (*Config, error) {
 		jwtSecret = hex.EncodeToString(b)
 	}
 
-	jwtExpiry, err := parseDuration(os.Getenv("OLLANTA_JWT_EXPIRY"), 15*time.Minute)
+	jwtExpiry, err := parseDuration(envOrFile("OLLANTA_JWT_EXPIRY", fileCfg.Server.JWTExpiry), 15*time.Minute)
 	if err != nil {
 		return nil, errors.New("invalid OLLANTA_JWT_EXPIRY")
 	}
-	refreshExpiry, err := parseDuration(os.Getenv("OLLANTA_REFRESH_EXPIRY"), 30*24*time.Hour)
+	refreshExpiry, err := parseDuration(envOrFile("OLLANTA_REFRESH_EXPIRY", fileCfg.Server.RefreshExpiry), 30*24*time.Hour)
 	if err != nil {
 		return nil, errors.New("invalid OLLANTA_REFRESH_EXPIRY")
 	}
 
 	cfg := &Config{
-		Addr:               envOr("OLLANTA_ADDR", ":8080"),
-		DatabaseURL:        os.Getenv("OLLANTA_DATABASE_URL"),
-		ZincSearchURL:      envOr("OLLANTA_ZINCSEARCH_URL", "http://localhost:4080"),
-		ZincSearchUser:     envOr("OLLANTA_ZINCSEARCH_USER", "admin"),
-		ZincSearchPassword: envOr("OLLANTA_ZINCSEARCH_PASSWORD", "admin"),
-		SearchBackend:      envOr("OLLANTA_SEARCH_BACKEND", "zincsearch"),
-		LogLevel:           envOr("OLLANTA_LOG_LEVEL", "info"),
+		Addr:               envOrFileOr("OLLANTA_ADDR", fileCfg.Server.Addr, ":8080"),
+		DatabaseURL:        envOrFile("OLLANTA_DATABASE_URL", fileCfg.Server.DatabaseURL),
+		ZincSearchURL:      envOrFileOr("OLLANTA_ZINCSEARCH_URL", fileCfg.ZincSearch.URL, "http://localhost:4080"),
+		ZincSearchUser:     envOrFileOr("OLLANTA_ZINCSEARCH_USER", fileCfg.ZincSearch.User, "admin"),
+		ZincSearchPassword: envOrFileOr("OLLANTA_ZINCSEARCH_PASSWORD", fileCfg.ZincSearch.Password, "admin"),
+		SearchBackend:      envOrFileOr("OLLANTA_SEARCH_BACKEND", fileCfg.Server.SearchBackend, "zincsearch"),
+		LogLevel:           envOrFileOr("OLLANTA_LOG_LEVEL", fileCfg.Server.LogLevel, "info"),
 		JWTSecret:          jwtSecret,
 		JWTExpiry:          jwtExpiry,
 		RefreshExpiry:      refreshExpiry,
-		OAuthRedirectBase:  os.Getenv("OLLANTA_OAUTH_REDIRECT_BASE"),
-		GitHubClientID:     os.Getenv("OLLANTA_GITHUB_CLIENT_ID"),
-		GitHubClientSecret: os.Getenv("OLLANTA_GITHUB_CLIENT_SECRET"),
-		GitLabClientID:     os.Getenv("OLLANTA_GITLAB_CLIENT_ID"),
-		GitLabClientSecret: os.Getenv("OLLANTA_GITLAB_CLIENT_SECRET"),
-		GoogleClientID:     os.Getenv("OLLANTA_GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: os.Getenv("OLLANTA_GOOGLE_CLIENT_SECRET"),
-		ScannerToken:       os.Getenv("OLLANTA_SCANNER_TOKEN"),
+		OAuthRedirectBase:  envOrFile("OLLANTA_OAUTH_REDIRECT_BASE", fileCfg.Server.OAuthRedirectBase),
+		GitHubClientID:     envOrFile("OLLANTA_GITHUB_CLIENT_ID", fileCfg.OAuth.GitHub.ClientID),
+		GitHubClientSecret: envOrFile("OLLANTA_GITHUB_CLIENT_SECRET", fileCfg.OAuth.GitHub.ClientSecret),
+		GitLabClientID:     envOrFile("OLLANTA_GITLAB_CLIENT_ID", fileCfg.OAuth.GitLab.ClientID),
+		GitLabClientSecret: envOrFile("OLLANTA_GITLAB_CLIENT_SECRET", fileCfg.OAuth.GitLab.ClientSecret),
+		GoogleClientID:     envOrFile("OLLANTA_GOOGLE_CLIENT_ID", fileCfg.OAuth.Google.ClientID),
+		GoogleClientSecret: envOrFile("OLLANTA_GOOGLE_CLIENT_SECRET", fileCfg.OAuth.Google.ClientSecret),
+		ScannerToken:       envOrFile("OLLANTA_SCANNER_TOKEN", fileCfg.Server.ScannerToken),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -120,9 +161,34 @@ func MustLoad() *Config {
 	return cfg
 }
 
+func loadFileConfig(path string) (*fileConfig, error) {
+	cfg := &fileConfig{}
+	if path == "" {
+		return cfg, nil
+	}
+	if _, err := toml.DecodeFile(path, cfg); err != nil {
+		return nil, fmt.Errorf("load ollantaweb config %q: %w", path, err)
+	}
+	return cfg, nil
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envOrFile(key, fileValue string) string {
+	return envOr(key, fileValue)
+}
+
+func envOrFileOr(key, fileValue, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	if fileValue != "" {
+		return fileValue
 	}
 	return fallback
 }

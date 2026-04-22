@@ -41,27 +41,34 @@ type ScanOptions struct {
 // ParseFlags parses args (typically os.Args[1:]) into ScanOptions.
 // Returns an error if flag parsing fails (e.g. unknown flag).
 func ParseFlags(args []string) (*ScanOptions, error) {
-	fs := flag.NewFlagSet("ollanta", flag.ContinueOnError)
+	configPath := detectScannerConfigPath(args)
+	defaults, err := loadScannerFlagDefaults(configPath)
+	if err != nil {
+		return nil, err
+	}
 
-	projectDir := fs.String("project-dir", ".", "Root directory to scan")
-	sources := fs.String("sources", "./...", "Comma-separated source patterns")
-	exclusions := fs.String("exclusions", "", "Comma-separated glob patterns to exclude")
-	projectKey := fs.String("project-key", "", "Project identifier (default: directory base name)")
-	branch := fs.String("branch", "", "Explicit branch override for the analysis scope")
-	commitSHA := fs.String("commit-sha", "", "Explicit commit SHA override for the analysis scope")
-	pullRequestKey := fs.String("pull-request-key", "", "Explicit pull request key for pull request analysis")
-	pullRequestBranch := fs.String("pull-request-branch", "", "Explicit source branch for pull request analysis")
-	pullRequestBase := fs.String("pull-request-base", "", "Explicit target/base branch for pull request analysis")
-	format := fs.String("format", "all", "Output format: summary, json, sarif, all")
-	debug := fs.Bool("debug", false, "Enable debug output")
-	serve := fs.Bool("serve", false, "Open interactive web UI after scan")
-	port := fs.Int("port", 7777, "Port for -serve")
-	bind := fs.String("bind", "127.0.0.1", "Bind address for -serve (use 0.0.0.0 inside Docker)")
-	serverURL := fs.String("server", "", "URL of ollantaweb server to push results to (e.g. http://localhost:8080)")
-	serverToken := fs.String("server-token", "", "API token for authenticating with ollantaweb (Bearer)")
-	serverWait := fs.Bool("server-wait", false, "Wait for an accepted server-side scan job to complete")
-	waitTimeout := fs.Duration("server-wait-timeout", 10*time.Minute, "Maximum time to wait for a server-side scan job")
-	waitPoll := fs.Duration("server-wait-poll", 2*time.Second, "Polling interval while waiting for a server-side scan job")
+	fs := flag.NewFlagSet("ollanta", flag.ContinueOnError)
+	_ = fs.String("config", configPath, "Path to TOML config file")
+
+	projectDir := fs.String("project-dir", defaults.ProjectDir, "Root directory to scan")
+	sources := fs.String("sources", defaults.Sources, "Comma-separated source patterns")
+	exclusions := fs.String("exclusions", defaults.Exclusions, "Comma-separated glob patterns to exclude")
+	projectKey := fs.String("project-key", defaults.ProjectKey, "Project identifier (default: directory base name)")
+	branch := fs.String("branch", defaults.Branch, "Explicit branch override for the analysis scope")
+	commitSHA := fs.String("commit-sha", defaults.CommitSHA, "Explicit commit SHA override for the analysis scope")
+	pullRequestKey := fs.String("pull-request-key", defaults.PullRequestKey, "Explicit pull request key for pull request analysis")
+	pullRequestBranch := fs.String("pull-request-branch", defaults.PullRequestBranch, "Explicit source branch for pull request analysis")
+	pullRequestBase := fs.String("pull-request-base", defaults.PullRequestBase, "Explicit target/base branch for pull request analysis")
+	format := fs.String("format", defaults.Format, "Output format: summary, json, sarif, all")
+	debug := fs.Bool("debug", defaults.Debug, "Enable debug output")
+	serve := fs.Bool("serve", defaults.Serve, "Open interactive web UI after scan")
+	port := fs.Int("port", defaults.Port, "Port for -serve")
+	bind := fs.String("bind", defaults.Bind, "Bind address for -serve (use 0.0.0.0 inside Docker)")
+	serverURL := fs.String("server", defaults.Server, "URL of ollantaweb server to push results to (e.g. http://localhost:8080)")
+	serverToken := fs.String("server-token", defaults.ServerToken, "API token for authenticating with ollantaweb (Bearer)")
+	serverWait := fs.Bool("server-wait", defaults.ServerWait, "Wait for an accepted server-side scan job to complete")
+	waitTimeout := fs.Duration("server-wait-timeout", defaults.WaitTimeout, "Maximum time to wait for a server-side scan job")
+	waitPoll := fs.Duration("server-wait-poll", defaults.WaitPoll, "Polling interval while waiting for a server-side scan job")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err

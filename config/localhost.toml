@@ -1,0 +1,25 @@
+# Shared localhost defaults for the Ollanta scanner and centralized server.
+# Scanner CLI flags and OLLANTA_* environment variables override these values.
+
+[scanner]
+format = "all"
+serve = true
+bind = "127.0.0.1"
+port = 7777
+server = "http://localhost:8080"
+server_token = "ollanta-dev-scanner-token"
+server_wait = false
+server_wait_timeout = "10m"
+server_wait_poll = "2s"
+
+[server]
+addr = ":8080"
+database_url = "postgres://ollanta:ollanta_dev@localhost:5432/ollanta?sslmode=disable"
+search_backend = "zincsearch"
+log_level = "info"
+scanner_token = "ollanta-dev-scanner-token"
+
+[zincsearch]
+url = "http://localhost:4080"
+user = "admin"
+password = "ollanta_dev"

@@ -38,6 +38,7 @@ For contributor workflow and module-aware validation, see [CONTRIBUTIONS.md](CON
 
 ```sh
 ollanta \
+  -config ./config/localhost.toml \
   -project-dir . \
   -project-key my-project \
   -format all \
@@ -66,6 +67,7 @@ This starts PostgreSQL, ZincSearch, the `ollantaweb` API on port `8080`, plus th
 
 ```sh
 ollanta \
+  -config ./config/localhost.toml \
   -project-dir . \
   -project-key my-project \
   -format all \
@@ -109,12 +111,32 @@ For `application/`, `domain/`, `ollantastore/`, `ollantaweb/`, and `adapter/`, u
 
 On Windows, the `Makefile` prepends `C:\msys64\mingw64\bin` to `PATH` and sets `CGO_ENABLED=1` for its own targets.
 
+## Localhost TOML Configuration
+
+Use [config/localhost.toml](config/localhost.toml) to keep scanner, server, database, and search endpoints configurable outside hard-coded commands.
+
+Scanner example:
+
+```sh
+ollanta -config ./config/localhost.toml -project-dir . -project-key my-project
+```
+
+Centralized server example:
+
+```sh
+export OLLANTA_CONFIG_FILE=$PWD/config/localhost.toml
+go run ./ollantaweb/cmd/ollantaweb
+```
+
+Environment variables still override TOML values, and explicit scanner CLI flags override both.
+
 ---
 
 ## Common CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `-config` | none | Path to a TOML file with scanner localhost defaults |
 | `-project-dir` | `.` | Root directory to scan |
 | `-project-key` | directory name | Identifier used in reports |
 | `-sources` | `./...` | Comma-separated source patterns |
