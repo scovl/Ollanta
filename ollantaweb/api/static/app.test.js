@@ -111,6 +111,20 @@ test('buildProjectRoute preserves pull request scope in the URL', () => {
   assert.equal(route, '?project=demo&tab=information&pull_request=42');
 });
 
+test('render outputs the unified login card before authentication', () => {
+  const { app: harnessApp, elements } = createHarness();
+
+  harnessApp.render();
+
+  const html = elements.get('app').innerHTML;
+  assert.match(html, /login-card-unified/);
+  assert.match(html, /login-card-header/);
+  assert.match(html, /login-brand-name/);
+  assert.match(html, /login-features/);
+  assert.match(html, /Welcome back/);
+  assert.match(html, /Sign in/);
+});
+
 test('renderScopeToolbar shows the real default branch name in the branch selector', () => {
   const { app: harnessApp } = createHarness();
 

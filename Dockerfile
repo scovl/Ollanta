@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
 # ── Stage 1: builder ──────────────────────────────────────────────────────────
-# golang:1.21-bookworm ships gcc, so CGO works out of the box for tree-sitter.
-FROM golang:1.21-bookworm AS builder
+# golang:1.23-bookworm ships gcc, so CGO works out of the box for tree-sitter.
+FROM golang:1.23-bookworm AS builder
 
 WORKDIR /src
 

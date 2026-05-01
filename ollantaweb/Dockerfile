@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -21,6 +21,7 @@ COPY domain/go.mod      domain/go.sum*      ./domain/
 RUN go work sync || true
 
 # Copy only the modules ollantaweb needs (no CGO, no tree-sitter).
+COPY adapter/      ./adapter/
 COPY application/  ./application/
 COPY domain/       ./domain/
 COPY ollantacore/   ./ollantacore/

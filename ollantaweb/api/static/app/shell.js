@@ -8,6 +8,8 @@ import { badgeClassForGateStatus, cardClassForGateStatus, escAttr, escHtml, fmtD
 import { closeIssueDetail } from './features/issues.js';
 import { bindProjectViewControls, loadProject, renderProjectDetail } from './project-flow.js';
 
+const BRAND_MARK_PATH = '/branding/ollanta-mark.png';
+
 setUnauthorizedHandler(logout);
 
 export function render() {
@@ -25,15 +27,20 @@ function renderNav() {
   const user = state.user || {};
   const name = user.name || user.login || 'User';
   return `<nav>
-    <span class="logo">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      Ollanta
-    </span>
+    ${renderBrandLockup()}
     <span class="spacer"></span>
     <span class="user-info">${escHtml(name)}</span>
     <button class="logout-btn" id="logoutBtn">Sign out</button>
   </nav>`;
 }
+
+function renderBrandLockup() {
+  return `<span class="brand-lockup brand-lockup-inline">
+    <img class="brand-mark" src="${BRAND_MARK_PATH}" alt="Ollanta" width="36" height="36">
+  </span>`;
+}
+
+
 
 function renderContent() {
   if (state.view === 'projects') return renderDashboard();
@@ -43,22 +50,48 @@ function renderContent() {
 
 function renderLogin() {
   return `<div class="login-wrapper">
-    <div class="login-card">
-      <h1>
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        Ollanta
-      </h1>
-      <p class="subtitle">Static analysis platform</p>
-      <div class="field">
-        <label for="loginUser">Username</label>
-        <input id="loginUser" type="text" placeholder="admin" autocomplete="username">
+    <div class="login-card-unified">
+      <div class="login-card-header">
+        <img class="login-brand-mark" src="${BRAND_MARK_PATH}" alt="" aria-hidden="true" width="80" height="80">
+        <div class="login-brand-text">
+          <span class="login-brand-name">Ollanta</span>
+          <span class="login-brand-tagline">Static Analysis Platform</span>
+        </div>
+        <div class="login-features">
+          <div class="login-feature">
+            <span class="login-feature-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </span>
+            <span>Quality gates &amp; metrics across scans</span>
+          </div>
+          <div class="login-feature">
+            <span class="login-feature-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </span>
+            <span>Multi-project, branch &amp; PR tracking</span>
+          </div>
+          <div class="login-feature">
+            <span class="login-feature-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </span>
+            <span>Code browsing with inline issue markers</span>
+          </div>
+        </div>
       </div>
-      <div class="field">
-        <label for="loginPass">Password</label>
-        <input id="loginPass" type="password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" autocomplete="current-password">
+      <div class="login-card-content">
+        <p class="login-eyebrow">Welcome back</p>
+        <h1 class="login-title">Sign in</h1>
+        <div class="field">
+          <label for="loginUser">Username</label>
+          <input id="loginUser" type="text" placeholder="admin" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="loginPass">Password</label>
+          <input id="loginPass" type="password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" id="loginBtn">Sign in</button>
+        <div id="loginError" class="error-msg"></div>
       </div>
-      <button class="btn btn-primary" id="loginBtn">Sign in</button>
-      <div id="loginError" class="error-msg"></div>
     </div>
   </div>`;
 }
