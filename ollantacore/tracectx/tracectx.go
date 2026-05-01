@@ -1,3 +1,4 @@
+// Package tracectx serializes and restores W3C trace context across async boundaries.
 package tracectx
 
 import (
