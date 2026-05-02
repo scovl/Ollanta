@@ -139,7 +139,7 @@ test('render shows API docs and only configured observability links in the globa
   assert.match(html, /id="apiDocsBtn"/);
   assert.doesNotMatch(html, /href="\/api\/v1\/system\/info"/);
   assert.match(html, /href="\/metrics"/);
-  assert.match(html, /https:\/\/app.datadoghq.com\/dashboard\/abc/);
+  assert.match(html, /https:\/\/app\.datadoghq\.com\/dashboard\/abc/);
   assert.doesNotMatch(html, /http:\/\/localhost:9091\/targets/);
   assert.doesNotMatch(html, /http:\/\/localhost:16686/);
   assert.doesNotMatch(html, /http:\/\/localhost:3100\/ready/);
