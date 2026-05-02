@@ -304,9 +304,7 @@ func NewRouter(d *RouterDeps) http.Handler {
 					_ = err
 				}
 			}()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = w.Write([]byte(`{"status":"reindex started"}`))
+			jsonOK(w, http.StatusAccepted, map[string]string{"status": "reindex started"})
 		})
 	})
 
