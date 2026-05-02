@@ -150,30 +150,34 @@ async function ensureProjectTabLoaded(tab) {
     return;
   }
 
-  const loaders = {
-    activity: loadActivityData,
-    branches: loadBranchesData,
-    'pull-requests': loadPullRequestsData,
-    code: loadCodeTreeData,
-    information: loadProjectInfoData,
-    gate: loadGateData,
-    webhooks: loadWebhooksData,
-    profiles: loadProfilesData,
-  };
-  const stateKeys = {
-    activity: 'activityData',
-    branches: 'branchesData',
-    'pull-requests': 'pullRequestsData',
-    code: 'codeTreeData',
-    information: 'projectInfoData',
-    gate: 'gateData',
-    webhooks: 'webhooksData',
-    profiles: 'profilesData',
-  };
-  const stateKey = stateKeys[tab];
-  const loader = loaders[tab];
-  if (!stateKey || !loader || state[stateKey] !== null) return;
-  await loader();
+  switch (tab) {
+    case 'activity':
+      if (state.activityData === null) await loadActivityData();
+      return;
+    case 'branches':
+      if (state.branchesData === null) await loadBranchesData();
+      return;
+    case 'pull-requests':
+      if (state.pullRequestsData === null) await loadPullRequestsData();
+      return;
+    case 'code':
+      if (state.codeTreeData === null) await loadCodeTreeData();
+      return;
+    case 'information':
+      if (state.projectInfoData === null) await loadProjectInfoData();
+      return;
+    case 'gate':
+      if (state.gateData === null) await loadGateData();
+      return;
+    case 'webhooks':
+      if (state.webhooksData === null) await loadWebhooksData();
+      return;
+    case 'profiles':
+      if (state.profilesData === null) await loadProfilesData();
+      return;
+    default:
+      return;
+  }
 }
 
 export async function changeScope(scope) {
