@@ -62,6 +62,7 @@ func main() {
 	issueRepo := postgres.NewIssueRepository(db)
 	measureRepo := postgres.NewMeasureRepository(db)
 	snapshotRepo := postgres.NewCodeSnapshotRepository(db)
+	profileSnapshotRepo := postgres.NewProfileSnapshotRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	groupRepo := postgres.NewGroupRepository(db)
 	tokenRepo := postgres.NewTokenRepository(db)
@@ -73,6 +74,12 @@ func main() {
 	webhookRepo := postgres.NewWebhookRepository(db)
 	webhookJobRepo := postgres.NewWebhookJobRepository(db)
 	changelogRepo := postgres.NewChangelogRepository(db)
+
+	if err := profileRepo.SyncBuiltInProfiles(ctx); err != nil {
+		slog.Error("sync built-in quality profiles", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("quality profiles synchronized")
 
 	// ── Search backend ─────────────────────────────────────────────────────
 	zincCfg := search.ZincConfig{
@@ -101,30 +108,31 @@ func main() {
 
 	// ── HTTP server ────────────────────────────────────────────────────────
 	router := api.NewRouter(&api.RouterDeps{
-		Config:      cfg,
-		Projects:    projectRepo,
-		Scans:       scanRepo,
-		ScanJobs:    scanJobRepo,
-		IndexJobs:   indexJobRepo,
-		Issues:      issueRepo,
-		Measures:    measureRepo,
-		Snapshots:   snapshotRepo,
-		Users:       userRepo,
-		Groups:      groupRepo,
-		Tokens:      tokenRepo,
-		Sessions:    sessionRepo,
-		Perms:       permRepo,
-		Searcher:    searcher,
-		Indexer:     indexer,
-		Profiles:    profileRepo,
-		Gates:       gateRepo,
-		Periods:     periodRepo,
-		Webhooks:    webhookRepo,
-		WebhookJobs: webhookJobRepo,
-		Dispatcher:  webhookDispatcher,
-		MetricsReg:  metricsReg,
-		AppMetrics:  appMetrics,
-		Changelog:   changelogRepo,
+		Config:           cfg,
+		Projects:         projectRepo,
+		Scans:            scanRepo,
+		ScanJobs:         scanJobRepo,
+		IndexJobs:        indexJobRepo,
+		Issues:           issueRepo,
+		Measures:         measureRepo,
+		Snapshots:        snapshotRepo,
+		ProfileSnapshots: profileSnapshotRepo,
+		Users:            userRepo,
+		Groups:           groupRepo,
+		Tokens:           tokenRepo,
+		Sessions:         sessionRepo,
+		Perms:            permRepo,
+		Searcher:         searcher,
+		Indexer:          indexer,
+		Profiles:         profileRepo,
+		Gates:            gateRepo,
+		Periods:          periodRepo,
+		Webhooks:         webhookRepo,
+		WebhookJobs:      webhookJobRepo,
+		Dispatcher:       webhookDispatcher,
+		MetricsReg:       metricsReg,
+		AppMetrics:       appMetrics,
+		Changelog:        changelogRepo,
 	})
 
 	srv := &http.Server{

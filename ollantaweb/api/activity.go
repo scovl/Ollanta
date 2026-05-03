@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/scovl/ollanta/domain/model"
@@ -19,6 +20,7 @@ type ActivityHandler struct {
 	scans    *postgres.ScanRepository
 	projects *postgres.ProjectRepository
 	measures *postgres.MeasureRepository
+	profiles *postgres.ProfileSnapshotRepository
 }
 
 type activityEntry struct {
@@ -51,9 +53,25 @@ type activityDelta struct {
 }
 
 type activityEvent struct {
-	Category string `json:"category"` // "QUALITY_GATE", "VERSION", "ISSUE_SPIKE", "FIRST_ANALYSIS"
+	Category string `json:"category"` // "QUALITY_GATE", "VERSION", "ISSUE_SPIKE", "FIRST_ANALYSIS", "QUALITY_PROFILE"
 	Name     string `json:"name"`
 	Value    string `json:"value,omitempty"`
+}
+
+func appendProfileHashChangeEvents(entry *activityEntry, changes []model.ProfileHashChange) {
+	if entry == nil || len(changes) == 0 {
+		return
+	}
+	languages := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if change.Language != "" {
+			languages = append(languages, change.Language)
+		}
+	}
+	if len(languages) == 0 {
+		return
+	}
+	entry.Events = append(entry.Events, activityEvent{Category: "QUALITY_PROFILE", Name: "Quality Profile changed", Value: strings.Join(languages, ", ")})
 }
 
 func appendScanComparisonEvents(entry *activityEntry, current, previous *postgres.Scan) {
@@ -135,6 +153,22 @@ func (h *ActivityHandler) decorateActivityMeasures(ctx context.Context, entries 
 	}
 }
 
+func (h *ActivityHandler) decorateProfileEvents(ctx context.Context, entries []activityEntry, scans []*postgres.Scan) {
+	if h.profiles == nil {
+		return
+	}
+	for i := range entries {
+		if i+1 >= len(scans) {
+			continue
+		}
+		changes, err := h.profiles.HashChanges(ctx, scans[i].ID, scans[i+1].ID)
+		if err != nil {
+			continue
+		}
+		appendProfileHashChangeEvents(&entries[i], changes)
+	}
+}
+
 func buildActivityEntries(scans []*postgres.Scan, total, offset, limit int) []activityEntry {
 	entries := make([]activityEntry, 0, len(scans))
 	for i, s := range scans {
@@ -200,6 +234,7 @@ func (h *ActivityHandler) Activity(w http.ResponseWriter, r *http.Request) {
 
 	entries := buildActivityEntries(scans, total, offset, limit)
 	h.decorateActivityMeasures(ctx, entries)
+	h.decorateProfileEvents(ctx, entries, scans)
 
 	jsonOK(w, http.StatusOK, map[string]interface{}{
 		"items":  entries,

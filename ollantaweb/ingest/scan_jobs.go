@@ -50,6 +50,7 @@ type IngestRepositories struct {
 	Issues    *postgres.IssueRepository
 	Measures  *postgres.MeasureRepository
 	Snapshots *postgres.CodeSnapshotRepository
+	Profiles  *postgres.ProfileSnapshotRepository
 }
 
 // NewScanJobProcessor creates a background job processor for the compute role.
@@ -79,6 +80,7 @@ func NewScanJobProcessor(
 		searchEnqueuer,
 		webhookDispatcher,
 	)
+	ingestUseCase.SetProfileSnapshotRepo(repos.Profiles)
 
 	return &ScanJobProcessor{
 		inner: appingest.NewScanJobProcessor(workerID, &scanJobRepoAdapter{inner: jobs}, ingestUseCase),

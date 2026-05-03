@@ -22,30 +22,31 @@ const (
 
 // RouterDeps groups all dependencies needed to build the HTTP router.
 type RouterDeps struct {
-	Config      *config.Config
-	Projects    *postgres.ProjectRepository
-	Scans       *postgres.ScanRepository
-	ScanJobs    *postgres.ScanJobRepository
-	IndexJobs   *postgres.IndexJobRepository
-	Issues      *postgres.IssueRepository
-	Measures    *postgres.MeasureRepository
-	Snapshots   *postgres.CodeSnapshotRepository
-	Users       *postgres.UserRepository
-	Groups      *postgres.GroupRepository
-	Tokens      *postgres.TokenRepository
-	Sessions    *postgres.SessionRepository
-	Perms       *postgres.PermissionRepository
-	Searcher    search.ISearcher
-	Indexer     search.IIndexer
-	Profiles    *postgres.ProfileRepository
-	Gates       *postgres.GateRepository
-	Periods     *postgres.NewCodePeriodRepository
-	Webhooks    *postgres.WebhookRepository
-	WebhookJobs *postgres.WebhookJobRepository
-	Dispatcher  *webhook.Dispatcher
-	MetricsReg  *telemetry.Registry
-	AppMetrics  *telemetry.Metrics
-	Changelog   *postgres.ChangelogRepository
+	Config           *config.Config
+	Projects         *postgres.ProjectRepository
+	Scans            *postgres.ScanRepository
+	ScanJobs         *postgres.ScanJobRepository
+	IndexJobs        *postgres.IndexJobRepository
+	Issues           *postgres.IssueRepository
+	Measures         *postgres.MeasureRepository
+	Snapshots        *postgres.CodeSnapshotRepository
+	ProfileSnapshots *postgres.ProfileSnapshotRepository
+	Users            *postgres.UserRepository
+	Groups           *postgres.GroupRepository
+	Tokens           *postgres.TokenRepository
+	Sessions         *postgres.SessionRepository
+	Perms            *postgres.PermissionRepository
+	Searcher         search.ISearcher
+	Indexer          search.IIndexer
+	Profiles         *postgres.ProfileRepository
+	Gates            *postgres.GateRepository
+	Periods          *postgres.NewCodePeriodRepository
+	Webhooks         *postgres.WebhookRepository
+	WebhookJobs      *postgres.WebhookJobRepository
+	Dispatcher       *webhook.Dispatcher
+	MetricsReg       *telemetry.Registry
+	AppMetrics       *telemetry.Metrics
+	Changelog        *postgres.ChangelogRepository
 }
 
 // NewRouter builds and returns the complete chi router for the ollantaweb server.
@@ -105,7 +106,7 @@ func NewRouter(d *RouterDeps) http.Handler {
 	mh := &MeasuresHandler{measures: d.Measures, projects: d.Projects}
 	srh := &SearchHandler{searcher: d.Searcher}
 	oh := &OverviewHandler{projects: d.Projects, scans: d.Scans, issues: d.Issues, measures: d.Measures, scanJobs: d.ScanJobs, gates: d.Gates, periods: d.Periods}
-	ah := &ActivityHandler{scans: d.Scans, projects: d.Projects, measures: d.Measures}
+	ah := &ActivityHandler{scans: d.Scans, projects: d.Projects, measures: d.Measures, profiles: d.ProfileSnapshots}
 	psh := &ProjectScopeHandler{projects: d.Projects, scans: d.Scans, snapshots: d.Snapshots, issues: d.Issues}
 	outboxH := &OutboxJobsHandler{indexJobs: d.IndexJobs, webhookJobs: d.WebhookJobs}
 	backgroundTasksH := NewBackgroundTasksHandler(d.ScanJobs, d.IndexJobs, d.WebhookJobs, d.MetricsReg)
@@ -192,7 +193,9 @@ func NewRouter(d *RouterDeps) http.Handler {
 				r.Post("/projects/{key}/permissions/revoke", permsH.RevokeProject)
 			})
 
-			// Project-scoped profile and gate assignments (requires admin)
+			// Project-scoped profile and gate assignments.
+			r.Get("/projects/{key}/profiles", profilesH.ProjectProfiles)
+			r.Get("/projects/{key}/profiles/effective", profilesH.ProjectEffectiveProfiles)
 			r.Group(func(r chi.Router) {
 				r.Use(RequirePermission(d.Perms, "admin"))
 				r.Post("/projects/{key}/profiles", profilesH.AssignToProject)
@@ -238,7 +241,9 @@ func NewRouter(d *RouterDeps) http.Handler {
 			r.Route("/profiles", func(r chi.Router) {
 				r.Get("/", profilesH.List)
 				r.Get("/{id}", profilesH.Get)
+				r.Get("/{id}/changelog", profilesH.Changelog)
 				r.Get("/{id}/effective-rules", profilesH.EffectiveRules)
+				r.Get("/{id}/export", profilesH.Export)
 				r.Group(func(r chi.Router) {
 					r.Use(RequirePermission(d.Perms, "admin"))
 					r.Post("/", profilesH.Create)
@@ -246,6 +251,7 @@ func NewRouter(d *RouterDeps) http.Handler {
 					r.Delete("/{id}", profilesH.Delete)
 					r.Post("/{id}/rules", profilesH.ActivateRule)
 					r.Delete("/{id}/rules/{rule}", profilesH.DeactivateRule)
+					r.Post("/{id}/import", profilesH.Import)
 					r.Post("/{id}/copy", profilesH.Copy)
 					r.Post("/{id}/set-default", profilesH.SetDefault)
 				})
