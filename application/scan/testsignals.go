@@ -695,7 +695,22 @@ func ValidateOptions(opts *ScanOptions) error {
 	if err := ValidateMutationOptions(opts.Mutations); err != nil {
 		return err
 	}
+	if err := ValidateProfileOptions(opts.Profiles); err != nil {
+		return err
+	}
 	return nil
+}
+
+func ValidateProfileOptions(opts ProfileOptions) error {
+	if opts.Source == "" {
+		return nil
+	}
+	switch opts.Source {
+	case ProfileSourceAuto, ProfileSourceLocal, ProfileSourceServer, ProfileSourceBuiltin:
+		return nil
+	default:
+		return fmt.Errorf("unknown profile_source %q: expected auto, local, server, or builtin", opts.Source)
+	}
 }
 
 func ValidateTestOptions(opts TestOptions) error {

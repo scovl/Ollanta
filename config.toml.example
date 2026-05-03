@@ -11,6 +11,14 @@ server_wait = false
 server_wait_timeout = "10m"
 server_wait_poll = "2s"
 
+# Quality Profiles control which bundled rules execute and which severities or
+# params they use. auto = local file when profile_file is set, otherwise server
+# when server_url is set, otherwise built-in Ollanta Way.
+profile_source = "auto" # auto, local, server, builtin
+profile_file = ""      # JSON or YAML profile-as-code file
+profile_strict = false # fail scan if requested local/server profile cannot load
+profile_fetch_timeout = "10s"
+
 # Optional test-signal discovery. Disabled by default so scans remain fast and
 # never execute repository test commands unless explicitly requested.
 [tests]
