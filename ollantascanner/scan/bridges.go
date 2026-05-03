@@ -119,7 +119,7 @@ func (b *analyzerBridge) Check(ctx context.Context, ac port.AnalysisContext, iss
 		Path:     ac.Path,
 		Source:   ac.Source,
 		Language: ac.Language,
-		Params:   map[string]string{},
+		Params:   ac.Params,
 		AST:      (*goast.File)(nil),
 		FileSet:  (*token.FileSet)(nil),
 		Query:    ollantaparser.NewQueryRunner(),

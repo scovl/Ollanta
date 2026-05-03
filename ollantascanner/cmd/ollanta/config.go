@@ -18,25 +18,29 @@ type rootConfig struct {
 }
 
 type scannerConfig struct {
-	ProjectDir        string   `toml:"project_dir"`
-	Sources           []string `toml:"sources"`
-	Exclusions        []string `toml:"exclusions"`
-	ProjectKey        string   `toml:"project_key"`
-	Branch            string   `toml:"branch"`
-	CommitSHA         string   `toml:"commit_sha"`
-	PullRequestKey    string   `toml:"pull_request_key"`
-	PullRequestBranch string   `toml:"pull_request_branch"`
-	PullRequestBase   string   `toml:"pull_request_base"`
-	Format            string   `toml:"format"`
-	Debug             *bool    `toml:"debug"`
-	LocalUI           *bool    `toml:"local_ui"`
-	Port              *int     `toml:"port"`
-	Bind              string   `toml:"bind"`
-	ServerURL         string   `toml:"server_url"`
-	ServerToken       string   `toml:"server_token"`
-	ServerWait        *bool    `toml:"server_wait"`
-	ServerWaitTimeout string   `toml:"server_wait_timeout"`
-	ServerWaitPoll    string   `toml:"server_wait_poll"`
+	ProjectDir          string   `toml:"project_dir"`
+	Sources             []string `toml:"sources"`
+	Exclusions          []string `toml:"exclusions"`
+	ProjectKey          string   `toml:"project_key"`
+	Branch              string   `toml:"branch"`
+	CommitSHA           string   `toml:"commit_sha"`
+	PullRequestKey      string   `toml:"pull_request_key"`
+	PullRequestBranch   string   `toml:"pull_request_branch"`
+	PullRequestBase     string   `toml:"pull_request_base"`
+	Format              string   `toml:"format"`
+	Debug               *bool    `toml:"debug"`
+	LocalUI             *bool    `toml:"local_ui"`
+	Port                *int     `toml:"port"`
+	Bind                string   `toml:"bind"`
+	ServerURL           string   `toml:"server_url"`
+	ServerToken         string   `toml:"server_token"`
+	ServerWait          *bool    `toml:"server_wait"`
+	ServerWaitTimeout   string   `toml:"server_wait_timeout"`
+	ServerWaitPoll      string   `toml:"server_wait_poll"`
+	ProfileSource       string   `toml:"profile_source"`
+	ProfileFile         string   `toml:"profile_file"`
+	ProfileStrict       *bool    `toml:"profile_strict"`
+	ProfileFetchTimeout string   `toml:"profile_fetch_timeout"`
 }
 
 type testsConfig struct {
@@ -326,6 +330,12 @@ func applyScannerConfig(opts *appscan.ScanOptions, cfg scannerConfig, provided m
 		return err
 	}
 	if err := applyDurationFlag(&opts.WaitPoll, cfg.ServerWaitPoll, provided, "server-wait-poll", "scanner.server_wait_poll"); err != nil {
+		return err
+	}
+	applyStringFlag(&opts.Profiles.Source, cfg.ProfileSource, provided, "profile-source")
+	applyStringFlag(&opts.Profiles.FilePath, cfg.ProfileFile, provided, "profile-file")
+	applyBoolFlag(&opts.Profiles.Strict, cfg.ProfileStrict, provided, "profile-strict")
+	if err := applyDurationFlag(&opts.Profiles.FetchTimeout, cfg.ProfileFetchTimeout, provided, "profile-fetch-timeout", "scanner.profile_fetch_timeout"); err != nil {
 		return err
 	}
 	return nil

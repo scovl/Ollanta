@@ -23,6 +23,8 @@ type AnalysisContext struct {
 	Language string
 	// Source is the raw source content of the file.
 	Source []byte
+	// Params contains the effective profile parameter values for this rule invocation.
+	Params map[string]string
 	// ParsedFile is the tree-sitter ParsedFile; type is `any` to keep domain CGo-free.
 	ParsedFile any
 	// Query is the compiled tree-sitter query runner; type is `any`.

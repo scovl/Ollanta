@@ -21,5 +21,16 @@ type IProfileRepo interface {
 	AssignToProject(ctx context.Context, projectID int64, language string, profileID int64) error
 	ByProjectAndLanguage(ctx context.Context, projectID int64, language string) (*model.QualityProfile, error)
 	ResolveEffectiveRules(ctx context.Context, profileID int64) ([]*model.EffectiveRule, error)
+	ProjectProfiles(ctx context.Context, projectID int64) ([]*model.ProjectQualityProfile, error)
+	ProjectEffectiveProfiles(ctx context.Context, projectID int64) ([]*model.EffectiveQualityProfile, error)
+	ProfileChangelog(ctx context.Context, profileID int64, limit, offset int) ([]model.ProfileChangelogEntry, int, error)
+	ApplyProfileRules(ctx context.Context, profileID int64, entries []model.ProfileYAMLEntry) error
 	ApplyProfileYAML(ctx context.Context, projectID int64, language string, entries []model.ProfileYAMLEntry) error
+}
+
+// IProfileSnapshotRepo stores the quality profile policy snapshot attached to each scan.
+type IProfileSnapshotRepo interface {
+	Replace(ctx context.Context, projectID, scanID int64, scope model.AnalysisScope, snapshots []model.ProfileSnapshot) error
+	ListByScan(ctx context.Context, scanID int64) ([]model.ProfileSnapshot, bool, error)
+	HashChanges(ctx context.Context, currentScanID, previousScanID int64) ([]model.ProfileHashChange, error)
 }

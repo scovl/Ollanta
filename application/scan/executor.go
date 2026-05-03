@@ -48,7 +48,7 @@ func parseGoFile(path string, src []byte) (*goast.File, *token.FileSet) {
 
 // analyzeFile runs all matching analyzers on a single file and returns the issues found.
 // Returns nil on read or parse failure.
-func (e *Executor) analyzeFile(ctx context.Context, f DiscoveredFile) []*model.Issue {
+func (e *Executor) analyzeFile(ctx context.Context, f DiscoveredFile, policy *ProfilePolicy) []*model.Issue {
 	src, err := os.ReadFile(f.Path)
 	if err != nil {
 		return nil
@@ -79,9 +79,16 @@ func (e *Executor) analyzeFile(ctx context.Context, f DiscoveredFile) []*model.I
 		if a.Language() != f.Language && a.Language() != "*" {
 			continue
 		}
+		ruleConfig, active := policy.Rule(f.Language, a.Key())
+		if !active {
+			continue
+		}
+		ac.Params = cloneParams(ruleConfig.Params)
+		before := len(issues)
 		if err := a.Check(ctx, ac, &issues); err != nil {
 			log.Printf("ollanta: analyser %s error on %s: %v", a.Key(), f.Path, err)
 		}
+		applyProfileSeverity(issues[before:], ruleConfig.Severity)
 	}
 	return issues
 }
@@ -89,9 +96,12 @@ func (e *Executor) analyzeFile(ctx context.Context, f DiscoveredFile) []*model.I
 // Run analyses all files in parallel and returns the aggregated issues.
 // Individual file failures are isolated: a crash or parse error produces an
 // empty result for that file rather than aborting the whole run.
-func (e *Executor) Run(ctx context.Context, files []DiscoveredFile) ([]*model.Issue, error) {
+func (e *Executor) Run(ctx context.Context, files []DiscoveredFile, policy *ProfilePolicy) ([]*model.Issue, error) {
 	if len(files) == 0 {
 		return []*model.Issue{}, nil
+	}
+	if policy == nil {
+		policy = AllowAllProfilePolicy()
 	}
 
 	type result struct{ issues []*model.Issue }
@@ -122,7 +132,7 @@ func (e *Executor) Run(ctx context.Context, files []DiscoveredFile) ([]*model.Is
 			default:
 			}
 
-			out <- result{issues: e.analyzeFile(ctx, f)}
+			out <- result{issues: e.analyzeFile(ctx, f, policy)}
 		}()
 	}
 
@@ -136,4 +146,23 @@ func (e *Executor) Run(ctx context.Context, files []DiscoveredFile) ([]*model.Is
 		all = append(all, r.issues...)
 	}
 	return all, nil
+}
+
+func cloneParams(params map[string]string) map[string]string {
+	out := make(map[string]string, len(params))
+	for key, value := range params {
+		out[key] = value
+	}
+	return out
+}
+
+func applyProfileSeverity(issues []*model.Issue, severity string) {
+	if severity == "" {
+		return
+	}
+	for _, issue := range issues {
+		if issue != nil {
+			issue.Severity = model.Severity(severity)
+		}
+	}
 }

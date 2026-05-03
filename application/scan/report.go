@@ -87,8 +87,17 @@ type ScannerOptions struct {
 	ServerWait        bool                   `json:"server_wait,omitempty"`
 	WaitTimeout       string                 `json:"server_wait_timeout,omitempty"`
 	WaitPoll          string                 `json:"server_wait_poll,omitempty"`
+	Profiles          ScannerProfileOptions  `json:"profiles,omitempty"`
 	Tests             ScannerTestOptions     `json:"tests,omitempty"`
 	Mutations         ScannerMutationOptions `json:"mutations,omitempty"`
+}
+
+// ScannerProfileOptions describes quality profile loading options without secrets.
+type ScannerProfileOptions struct {
+	Source       string `json:"source,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`
+	Strict       bool   `json:"strict,omitempty"`
+	FetchTimeout string `json:"fetch_timeout,omitempty"`
 }
 
 // ScannerTestOptions describes test-signal scanner parameters without secrets.
@@ -188,12 +197,13 @@ type ScannerMutationModuleOptions struct {
 
 // Report is the complete output of a scan run.
 type Report struct {
-	Metadata       Metadata            `json:"metadata"`
-	ScannerOptions ScannerOptions      `json:"scanner_options,omitempty"`
-	Measures       Measures            `json:"measures"`
-	Issues         []*model.Issue      `json:"issues"`
-	CodeSnapshot   *model.CodeSnapshot `json:"code_snapshot,omitempty"`
-	TestSignals    *TestSignalReport   `json:"test_signals,omitempty"`
+	Metadata        Metadata                `json:"metadata"`
+	ScannerOptions  ScannerOptions          `json:"scanner_options,omitempty"`
+	Measures        Measures                `json:"measures"`
+	Issues          []*model.Issue          `json:"issues"`
+	QualityProfiles []model.ProfileSnapshot `json:"quality_profiles,omitempty"`
+	CodeSnapshot    *model.CodeSnapshot     `json:"code_snapshot,omitempty"`
+	TestSignals     *TestSignalReport       `json:"test_signals,omitempty"`
 }
 
 // Build assembles a Report from the discovered files, analysis results, and elapsed time.

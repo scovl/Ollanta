@@ -37,6 +37,7 @@ type ScanOptions struct {
 	ServerWait        bool            // wait for accepted server job until completion
 	WaitTimeout       time.Duration   // maximum time to wait for server-side job completion
 	WaitPoll          time.Duration   // polling interval while waiting for server-side job completion
+	Profiles          ProfileOptions  // effective quality profile loading and enforcement
 	Tests             TestOptions     // optional test-signal discovery and collection
 	Mutations         MutationOptions // optional mutation-signal discovery and collection
 }
@@ -65,6 +66,10 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 	serverWait := fs.Bool("server-wait", false, "Wait for an accepted server-side scan job to complete")
 	waitTimeout := fs.Duration("server-wait-timeout", 10*time.Minute, "Maximum time to wait for a server-side scan job")
 	waitPoll := fs.Duration("server-wait-poll", 2*time.Second, "Polling interval while waiting for a server-side scan job")
+	profileSource := fs.String("profile-source", ProfileSourceAuto, "Quality profile source: auto, local, server, or builtin")
+	profileFile := fs.String("profile-file", "", "Path to a local profile-as-code JSON file")
+	profileStrict := fs.Bool("profile-strict", false, "Fail the scan when the requested quality profile cannot be loaded")
+	profileFetchTimeout := fs.Duration("profile-fetch-timeout", 10*time.Second, "Maximum time to fetch effective profiles from ollantaweb")
 	withTests := fs.Bool("with-tests", false, "Enable test signal discovery and report collection without running tests")
 	testsMode := fs.String("tests-mode", TestModeCollect, "Test signal mode: collect, run, or doctor")
 	testsRun := fs.Bool("tests-run", false, "Explicitly allow configured test commands to run")
@@ -112,6 +117,12 @@ func ParseFlags(args []string) (*ScanOptions, error) {
 		ServerWait:        *serverWait,
 		WaitTimeout:       *waitTimeout,
 		WaitPoll:          *waitPoll,
+		Profiles: ProfileOptions{
+			Source:       *profileSource,
+			FilePath:     *profileFile,
+			Strict:       *profileStrict,
+			FetchTimeout: *profileFetchTimeout,
+		},
 		Tests: TestOptions{
 			Enabled:                *withTests,
 			Mode:                   *testsMode,
@@ -208,8 +219,18 @@ func (uc *ScanUseCase) Run(ctx context.Context, opts *ScanOptions) (*Report, err
 		fmt.Fprintf(os.Stderr, "[debug] discovered %d files\n", len(files))
 	}
 
+	profilePolicy, err := ResolveProfilePolicy(ctx, opts, discoveredLanguages(files))
+	if err != nil {
+		return nil, fmt.Errorf("quality profiles: %w", err)
+	}
+	if opts.Debug {
+		for _, diagnostic := range profilePolicy.Diagnostics() {
+			fmt.Fprintf(os.Stderr, "[debug] profile %s: %s\n", diagnostic.Language, diagnostic.Message)
+		}
+	}
+
 	// 2. Analyze in parallel
-	issues, err := uc.executor.Run(ctx, files)
+	issues, err := uc.executor.Run(ctx, files, profilePolicy)
 	if err != nil {
 		return nil, fmt.Errorf("executor: %w", err)
 	}
@@ -225,6 +246,7 @@ func (uc *ScanUseCase) Run(ctx context.Context, opts *ScanOptions) (*Report, err
 		PullRequestKey:  scmCtx.PullRequestKey,
 		PullRequestBase: scmCtx.PullRequestBase,
 	})
+	report.QualityProfiles = profilePolicy.Snapshots()
 	report.ScannerOptions = scannerOptionsFromScanOptions(opts)
 	if err := collectReportTestSignals(report, opts, start); err != nil {
 		return nil, err
@@ -277,9 +299,37 @@ func scannerOptionsFromScanOptions(opts *ScanOptions) ScannerOptions {
 		ServerWait:        opts.ServerWait,
 		WaitTimeout:       opts.WaitTimeout.String(),
 		WaitPoll:          opts.WaitPoll.String(),
+		Profiles:          scannerProfileOptionsFromProfileOptions(opts.Profiles),
 		Tests:             scannerTestOptionsFromTestOptions(opts.Tests),
 		Mutations:         scannerMutationOptionsFromMutationOptions(opts.Mutations),
 	}
+}
+
+func scannerProfileOptionsFromProfileOptions(opts ProfileOptions) ScannerProfileOptions {
+	profileOptions := ScannerProfileOptions{
+		Source:   opts.Source,
+		FilePath: opts.FilePath,
+		Strict:   opts.Strict,
+	}
+	if opts.FetchTimeout > 0 {
+		profileOptions.FetchTimeout = opts.FetchTimeout.String()
+	}
+	return profileOptions
+}
+
+func discoveredLanguages(files []DiscoveredFile) []string {
+	seen := map[string]bool{}
+	for _, file := range files {
+		if file.Language != "" && !seen[file.Language] {
+			seen[file.Language] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for language := range seen {
+		out = append(out, language)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func scannerTestOptionsFromTestOptions(opts TestOptions) ScannerTestOptions {
