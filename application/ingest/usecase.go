@@ -60,12 +60,13 @@ type IngestMeasures struct {
 // IngestRequest is the payload accepted by POST /api/v1/scans.
 // Its JSON shape is identical to the report.json produced by ollantascanner.
 type IngestRequest struct {
-	Metadata       IngestMetadata      `json:"metadata"`
-	ScannerOptions json.RawMessage     `json:"scanner_options,omitempty"`
-	Measures       IngestMeasures      `json:"measures"`
-	Issues         []*model.Issue      `json:"issues"`
-	CodeSnapshot   *model.CodeSnapshot `json:"code_snapshot,omitempty"`
-	TestSignals    json.RawMessage     `json:"test_signals,omitempty"`
+	Metadata        IngestMetadata          `json:"metadata"`
+	ScannerOptions  json.RawMessage         `json:"scanner_options,omitempty"`
+	Measures        IngestMeasures          `json:"measures"`
+	Issues          []*model.Issue          `json:"issues"`
+	QualityProfiles []model.ProfileSnapshot `json:"quality_profiles,omitempty"`
+	CodeSnapshot    *model.CodeSnapshot     `json:"code_snapshot,omitempty"`
+	TestSignals     json.RawMessage         `json:"test_signals,omitempty"`
 }
 
 // IngestResult is the response returned after a successful ingest.
@@ -99,6 +100,7 @@ type IngestUseCase struct {
 	issues    port.IIssueRepo
 	measures  port.IMeasureRepo
 	snapshots port.ICodeSnapshotRepo
+	profiles  port.IProfileSnapshotRepo
 	indexer   ISearchEnqueuer    // optional — nil disables search indexing
 	webhooks  IWebhookDispatcher // optional — nil disables webhook dispatch
 }
@@ -123,6 +125,11 @@ func NewIngestUseCase(
 		indexer:   indexer,
 		webhooks:  webhooks,
 	}
+}
+
+// SetProfileSnapshotRepo enables persistence for scan-time quality profile snapshots.
+func (uc *IngestUseCase) SetProfileSnapshotRepo(repo port.IProfileSnapshotRepo) {
+	uc.profiles = repo
 }
 
 func resolveRequestScope(meta IngestMetadata) (model.AnalysisScope, error) {
@@ -206,15 +213,7 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 	}
 
 	// ── 2. Fetch previous scan for tracking ──────────────────────────────────
-	var prevScan *model.Scan
-	_ = pipelineSteps.fetchPrevScan.run(ctx, func(ctx context.Context) error {
-		defaultBranch, _, err := uc.scans.ResolveDefaultBranch(ctx, project.ID, project.MainBranch)
-		if err != nil {
-			return err
-		}
-		prevScan, err = uc.scans.GetLatestInScope(ctx, project.ID, scope, defaultBranch)
-		return err
-	})
+	prevScan := uc.fetchPreviousScan(ctx, project, scope)
 
 	// ── 3. Issue tracking ────────────────────────────────────────────────────
 	prevIssues := uc.fetchPrevIssues(ctx, project.ID, prevScan)
@@ -284,32 +283,16 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 		return nil, fmt.Errorf("bulk insert measures: %w", err)
 	}
 
-	// ── 8. Persist latest code snapshot for the scope ───────────────────────
-	if uc.snapshots != nil && req.CodeSnapshot != nil {
-		if err := uc.snapshots.Replace(ctx, &model.CodeSnapshotState{
-			ProjectID: project.ID,
-			ScanID:    scan.ID,
-			Scope:     scope,
-			Snapshot:  *req.CodeSnapshot,
-		}); err != nil {
-			return nil, fmt.Errorf("persist code snapshot: %w", err)
-		}
+	// ── 8. Persist latest code/profile snapshots for the scope ──────────────
+	if err := uc.persistScanArtifacts(ctx, project.ID, scan.ID, scope, req); err != nil {
+		return nil, err
 	}
 
 	// ── 9. Async: enqueue search indexing ────────────────────────────────────
-	if uc.indexer != nil {
-		_ = pipelineSteps.indexSearch.run(ctx, func(ctx context.Context) error {
-			uc.indexer.Enqueue(ctx, scan.ID, project.ID, project.Key)
-			return nil
-		})
-	}
+	uc.enqueueSearchIndex(ctx, scan.ID, project.ID, project.Key)
 
 	// ── 10. Fire webhooks ────────────────────────────────────────────────────
-	if uc.webhooks != nil {
-		_ = pipelineSteps.fireWebhooks.run(ctx, func(ctx context.Context) error {
-			return uc.webhooks.Dispatch(ctx, project.ID, scan.ID, "scan.completed")
-		})
-	}
+	uc.dispatchScanWebhook(ctx, project.ID, scan.ID)
 
 	return &IngestResult{
 		ScanID:       scan.ID,
@@ -323,6 +306,58 @@ func (uc *IngestUseCase) Ingest(ctx context.Context, req *IngestRequest) (*Inges
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+func (uc *IngestUseCase) fetchPreviousScan(ctx context.Context, project *model.Project, scope model.AnalysisScope) *model.Scan {
+	var prevScan *model.Scan
+	_ = pipelineSteps.fetchPrevScan.run(ctx, func(ctx context.Context) error {
+		defaultBranch, _, err := uc.scans.ResolveDefaultBranch(ctx, project.ID, project.MainBranch)
+		if err != nil {
+			return err
+		}
+		prevScan, err = uc.scans.GetLatestInScope(ctx, project.ID, scope, defaultBranch)
+		return err
+	})
+	return prevScan
+}
+
+func (uc *IngestUseCase) persistScanArtifacts(ctx context.Context, projectID, scanID int64, scope model.AnalysisScope, req *IngestRequest) error {
+	if uc.snapshots != nil && req.CodeSnapshot != nil {
+		if err := uc.snapshots.Replace(ctx, &model.CodeSnapshotState{
+			ProjectID: projectID,
+			ScanID:    scanID,
+			Scope:     scope,
+			Snapshot:  *req.CodeSnapshot,
+		}); err != nil {
+			return fmt.Errorf("persist code snapshot: %w", err)
+		}
+	}
+	if uc.profiles == nil {
+		return nil
+	}
+	if err := uc.profiles.Replace(ctx, projectID, scanID, scope, normalizeProfileSnapshots(req.QualityProfiles)); err != nil {
+		return fmt.Errorf("persist quality profile snapshots: %w", err)
+	}
+	return nil
+}
+
+func (uc *IngestUseCase) enqueueSearchIndex(ctx context.Context, scanID, projectID int64, projectKey string) {
+	if uc.indexer == nil {
+		return
+	}
+	_ = pipelineSteps.indexSearch.run(ctx, func(ctx context.Context) error {
+		uc.indexer.Enqueue(ctx, scanID, projectID, projectKey)
+		return nil
+	})
+}
+
+func (uc *IngestUseCase) dispatchScanWebhook(ctx context.Context, projectID, scanID int64) {
+	if uc.webhooks == nil {
+		return
+	}
+	_ = pipelineSteps.fireWebhooks.run(ctx, func(ctx context.Context) error {
+		return uc.webhooks.Dispatch(ctx, projectID, scanID, "scan.completed")
+	})
+}
 
 func issueRowToDomain(r *model.IssueRow) *model.Issue {
 	return &model.Issue{
@@ -360,6 +395,21 @@ func buildTrackingStateMap(result *service.TrackingResult) map[*model.Issue]stri
 		tracking[pair.Current] = string(model.IssueTrackingStateReopened)
 	}
 	return tracking
+}
+
+func normalizeProfileSnapshots(snapshots []model.ProfileSnapshot) []model.ProfileSnapshot {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	out := make([]model.ProfileSnapshot, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		if snapshot.Language == "" {
+			continue
+		}
+		snapshot.MetadataAvailable = true
+		out = append(out, snapshot)
+	}
+	return out
 }
 
 func domainToIssueRow(iss *model.Issue, scanID, projectID int64, trackingState string) model.IssueRow {

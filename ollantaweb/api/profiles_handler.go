@@ -3,19 +3,57 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/scovl/ollanta/domain/model"
+	"github.com/scovl/ollanta/domain/port"
 	"github.com/scovl/ollanta/ollantastore/postgres"
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	profileInvalidIDMessage       = "invalid id"
+	profileInvalidJSONMessage     = "invalid json"
+	profileInvalidDocumentMessage = "invalid profile document"
+	profileNotFoundMessage        = "profile not found"
 )
 
 // ProfilesHandler handles quality profile API endpoints.
 type ProfilesHandler struct {
-	profiles *postgres.ProfileRepository
+	profiles port.IProfileRepo
 	projects *postgres.ProjectRepository
 }
 
+type profileCodeDocument struct {
+	Version  int                   `json:"version" yaml:"version"`
+	Language string                `json:"language,omitempty" yaml:"language,omitempty"`
+	Name     string                `json:"name,omitempty" yaml:"name,omitempty"`
+	Rules    []profileCodeRule     `json:"rules,omitempty" yaml:"rules,omitempty"`
+	Profiles []profileCodeLanguage `json:"profiles,omitempty" yaml:"profiles,omitempty"`
+}
+
+type profileCodeLanguage struct {
+	Language string            `json:"language" yaml:"language"`
+	Name     string            `json:"name,omitempty" yaml:"name,omitempty"`
+	Rules    []profileCodeRule `json:"rules" yaml:"rules"`
+}
+
+type profileCodeRule struct {
+	Key      string            `json:"key,omitempty" yaml:"key,omitempty"`
+	RuleKey  string            `json:"rule_key,omitempty" yaml:"rule_key,omitempty"`
+	Rule     string            `json:"rule,omitempty" yaml:"rule,omitempty"`
+	Severity string            `json:"severity,omitempty" yaml:"severity,omitempty"`
+	Params   map[string]string `json:"params,omitempty" yaml:"params,omitempty"`
+	Active   *bool             `json:"active,omitempty" yaml:"active,omitempty"`
+	Activate *bool             `json:"activate,omitempty" yaml:"activate,omitempty"`
+}
+
 // NewProfilesHandler creates a ProfilesHandler.
-func NewProfilesHandler(profiles *postgres.ProfileRepository, projects *postgres.ProjectRepository) *ProfilesHandler {
+func NewProfilesHandler(profiles port.IProfileRepo, projects *postgres.ProjectRepository) *ProfilesHandler {
 	return &ProfilesHandler{profiles: profiles, projects: projects}
 }
 
@@ -34,12 +72,12 @@ func (h *ProfilesHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	p, err := h.profiles.GetByID(r.Context(), id)
 	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "profile not found")
+		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
 		return
 	}
 	if err != nil {
@@ -51,9 +89,9 @@ func (h *ProfilesHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /api/v1/profiles
 func (h *ProfilesHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var p postgres.QualityProfile
+	var p model.QualityProfile
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid json")
+		jsonError(w, http.StatusBadRequest, profileInvalidJSONMessage)
 		return
 	}
 	if err := h.profiles.Create(r.Context(), &p); err != nil {
@@ -67,12 +105,12 @@ func (h *ProfilesHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
-	var p postgres.QualityProfile
+	var p model.QualityProfile
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid json")
+		jsonError(w, http.StatusBadRequest, profileInvalidJSONMessage)
 		return
 	}
 	p.ID = id
@@ -87,7 +125,7 @@ func (h *ProfilesHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	if err := h.profiles.Delete(r.Context(), id); err != nil {
@@ -101,7 +139,7 @@ func (h *ProfilesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) ActivateRule(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	var req struct {
@@ -110,11 +148,11 @@ func (h *ProfilesHandler) ActivateRule(w http.ResponseWriter, r *http.Request) {
 		Params   map[string]string `json:"params"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid json")
+		jsonError(w, http.StatusBadRequest, profileInvalidJSONMessage)
 		return
 	}
 	if err := h.profiles.ActivateRule(r.Context(), id, req.RuleKey, req.Severity, req.Params); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -124,12 +162,12 @@ func (h *ProfilesHandler) ActivateRule(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) DeactivateRule(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	rule := routeParam(r, "rule")
 	if err := h.profiles.DeactivateRule(r.Context(), id, rule); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -139,7 +177,7 @@ func (h *ProfilesHandler) DeactivateRule(w http.ResponseWriter, r *http.Request)
 func (h *ProfilesHandler) EffectiveRules(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	rules, err := h.profiles.ResolveEffectiveRules(r.Context(), id)
@@ -148,6 +186,90 @@ func (h *ProfilesHandler) EffectiveRules(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	jsonOK(w, http.StatusOK, rules)
+}
+
+// Import handles POST /api/v1/profiles/{id}/import.
+func (h *ProfilesHandler) Import(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
+		return
+	}
+	profile, err := h.profiles.GetByID(r.Context(), id)
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	doc, err := decodeProfileCodeDocument(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, profileInvalidDocumentMessage)
+		return
+	}
+	rules, err := profileImportRules(doc, profile.Language)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	entries := make([]model.ProfileYAMLEntry, 0, len(rules))
+	for _, rule := range rules {
+		entries = append(entries, model.ProfileYAMLEntry{RuleKey: profileCodeRuleKey(rule), Severity: rule.Severity, Params: rule.Params, Activate: profileCodeRuleActive(rule)})
+	}
+	if err := h.profiles.ApplyProfileRules(r.Context(), id, entries); err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, map[string]any{"imported_rules": len(rules)})
+}
+
+// Export handles GET /api/v1/profiles/{id}/export.
+func (h *ProfilesHandler) Export(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
+		return
+	}
+	profile, err := h.profiles.GetByID(r.Context(), id)
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rules, err := h.profiles.ResolveEffectiveRules(r.Context(), id)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	doc := profileCodeDocument{Version: 1, Language: profile.Language, Name: profile.Name, Rules: make([]profileCodeRule, 0, len(rules))}
+	for _, rule := range rules {
+		active := !rule.Disabled && !strings.EqualFold(rule.Severity, "off")
+		doc.Rules = append(doc.Rules, profileCodeRule{Key: rule.RuleKey, Severity: rule.Severity, Params: rule.Params, Active: &active})
+	}
+	jsonOK(w, http.StatusOK, doc)
+}
+
+// Changelog handles GET /api/v1/profiles/{id}/changelog.
+func (h *ProfilesHandler) Changelog(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r, "id")
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	entries, total, err := h.profiles.ProfileChangelog(r.Context(), id, limit, offset)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, map[string]any{"items": entries, "total": total, "limit": limit, "offset": offset})
 }
 
 // AssignToProject handles POST /api/v1/projects/{key}/profiles
@@ -167,21 +289,49 @@ func (h *ProfilesHandler) AssignToProject(w http.ResponseWriter, r *http.Request
 		ProfileID int64  `json:"profile_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid json")
+		jsonError(w, http.StatusBadRequest, profileInvalidJSONMessage)
 		return
 	}
 	if err := h.profiles.AssignToProject(r.Context(), project.ID, req.Language, req.ProfileID); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ProjectProfiles handles GET /api/v1/projects/{key}/profiles.
+func (h *ProfilesHandler) ProjectProfiles(w http.ResponseWriter, r *http.Request) {
+	project, ok := h.resolveProject(w, r)
+	if !ok {
+		return
+	}
+	profiles, err := h.profiles.ProjectProfiles(r.Context(), project.ID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, profiles)
+}
+
+// ProjectEffectiveProfiles handles GET /api/v1/projects/{key}/profiles/effective.
+func (h *ProfilesHandler) ProjectEffectiveProfiles(w http.ResponseWriter, r *http.Request) {
+	project, ok := h.resolveProject(w, r)
+	if !ok {
+		return
+	}
+	profiles, err := h.profiles.ProjectEffectiveProfiles(r.Context(), project.ID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, http.StatusOK, profiles)
 }
 
 // Copy handles POST /api/v1/profiles/{id}/copy
 func (h *ProfilesHandler) Copy(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	var req struct {
@@ -203,7 +353,7 @@ func (h *ProfilesHandler) Copy(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r, "id")
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid id")
+		jsonError(w, http.StatusBadRequest, profileInvalidIDMessage)
 		return
 	}
 	if err := h.profiles.SetDefault(r.Context(), id); err != nil {
@@ -211,4 +361,81 @@ func (h *ProfilesHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ProfilesHandler) resolveProject(w http.ResponseWriter, r *http.Request) (*postgres.Project, bool) {
+	key := routeParam(r, "key")
+	project, err := h.projects.GetByKey(r.Context(), key)
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, "project not found")
+		return nil, false
+	}
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return nil, false
+	}
+	return project, true
+}
+
+func profileImportRules(doc profileCodeDocument, language string) ([]profileCodeRule, error) {
+	if doc.Version != 0 && doc.Version != 1 {
+		return nil, fmt.Errorf("unsupported profile schema version %d", doc.Version)
+	}
+	if doc.Language == language || (doc.Language == "" && len(doc.Profiles) == 0) {
+		return nonEmptyProfileRules(doc.Rules)
+	}
+	for _, profile := range doc.Profiles {
+		if profile.Language == language {
+			return nonEmptyProfileRules(profile.Rules)
+		}
+	}
+	return nil, fmt.Errorf("profile document does not contain language %q", language)
+}
+
+func decodeProfileCodeDocument(r *http.Request) (profileCodeDocument, error) {
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return profileCodeDocument{}, err
+	}
+	var doc profileCodeDocument
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "yaml") {
+		return doc, yaml.Unmarshal(data, &doc)
+	}
+	if err := json.Unmarshal(data, &doc); err == nil {
+		return doc, nil
+	}
+	return doc, yaml.Unmarshal(data, &doc)
+}
+
+func nonEmptyProfileRules(rules []profileCodeRule) ([]profileCodeRule, error) {
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("profile document contains no rules")
+	}
+	for _, rule := range rules {
+		if profileCodeRuleKey(rule) == "" {
+			return nil, fmt.Errorf("profile rule key is required")
+		}
+	}
+	return rules, nil
+}
+
+func profileCodeRuleKey(rule profileCodeRule) string {
+	if rule.Key != "" {
+		return rule.Key
+	}
+	if rule.RuleKey != "" {
+		return rule.RuleKey
+	}
+	return rule.Rule
+}
+
+func profileCodeRuleActive(rule profileCodeRule) bool {
+	active := true
+	if rule.Active != nil {
+		active = *rule.Active
+	}
+	if rule.Activate != nil {
+		active = *rule.Activate
+	}
+	return active && !strings.EqualFold(rule.Severity, "off")
 }

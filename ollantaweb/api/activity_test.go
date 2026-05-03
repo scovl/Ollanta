@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/scovl/ollanta/domain/model"
 	"github.com/scovl/ollanta/ollantastore/postgres"
 )
 
@@ -61,5 +62,17 @@ func TestBuildActivityEntriesMarksFirstAnalysis(t *testing.T) {
 	}
 	if len(entries[0].Events) != 1 || entries[0].Events[0].Category != "FIRST_ANALYSIS" {
 		t.Fatalf("Events = %#v, want first analysis event", entries[0].Events)
+	}
+}
+
+func TestAppendProfileHashChangeEvents(t *testing.T) {
+	entry := activityEntry{}
+	appendProfileHashChangeEvents(&entry, []model.ProfileHashChange{{Language: "go"}, {Language: "python"}})
+
+	if len(entry.Events) != 1 {
+		t.Fatalf("Events = %#v, want profile change event", entry.Events)
+	}
+	if entry.Events[0].Category != "QUALITY_PROFILE" || entry.Events[0].Value != "go, python" {
+		t.Fatalf("Events = %#v, want quality profile event with languages", entry.Events)
 	}
 }

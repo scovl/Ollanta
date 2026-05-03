@@ -312,6 +312,58 @@ func TestIngestReplacesLatestCodeSnapshotForSameScope(t *testing.T) {
 	}
 }
 
+func TestIngestPersistsQualityProfileSnapshots(t *testing.T) {
+	t.Parallel()
+
+	projectRepo := &scopeAwareProjectRepo{project: &model.Project{ID: 1, Key: "shop", MainBranch: defaultMainBranch}}
+	scanRepo := &observingScanRepo{defaultBranch: defaultMainBranch}
+	profileSnapshots := &recordingProfileSnapshotRepo{}
+	uc := NewIngestUseCase(projectRepo, scanRepo, &queryIssueRepo{}, &fakeMeasureRepo{}, nil, nil, nil)
+	uc.SetProfileSnapshotRepo(profileSnapshots)
+
+	_, err := uc.Ingest(context.Background(), &IngestRequest{
+		Metadata:        IngestMetadata{ProjectKey: "shop", ScopeType: model.ScopeTypeBranch, Branch: releaseBranch, AnalysisDate: time.Now().UTC().Format(time.RFC3339)},
+		Measures:        IngestMeasures{Files: 1, Lines: 8, Ncloc: 8},
+		QualityProfiles: []model.ProfileSnapshot{{Language: model.LangGo, ProfileName: "Strict Go", Source: model.ProfileSourceLocal, ActiveRuleCount: 3, RulesHash: "abc"}},
+	})
+	if err != nil {
+		t.Fatalf(ingestErrorMessage, err)
+	}
+	if len(profileSnapshots.snapshots) != 1 || profileSnapshots.snapshots[0].Language != model.LangGo {
+		t.Fatalf("snapshots = %+v, want Go profile snapshot", profileSnapshots.snapshots)
+	}
+	if !profileSnapshots.snapshots[0].MetadataAvailable {
+		t.Fatal("MetadataAvailable = false, want true")
+	}
+	if profileSnapshots.scope.Branch != releaseBranch {
+		t.Fatalf("scope branch = %q, want release", profileSnapshots.scope.Branch)
+	}
+}
+
+func TestIngestMarksLegacyProfileMetadataUnavailable(t *testing.T) {
+	t.Parallel()
+
+	projectRepo := &scopeAwareProjectRepo{project: &model.Project{ID: 1, Key: "shop", MainBranch: defaultMainBranch}}
+	scanRepo := &observingScanRepo{defaultBranch: defaultMainBranch}
+	profileSnapshots := &recordingProfileSnapshotRepo{}
+	uc := NewIngestUseCase(projectRepo, scanRepo, &queryIssueRepo{}, &fakeMeasureRepo{}, nil, nil, nil)
+	uc.SetProfileSnapshotRepo(profileSnapshots)
+
+	_, err := uc.Ingest(context.Background(), &IngestRequest{
+		Metadata: IngestMetadata{ProjectKey: "shop", AnalysisDate: time.Now().UTC().Format(time.RFC3339)},
+		Measures: IngestMeasures{Files: 1, Lines: 8, Ncloc: 8},
+	})
+	if err != nil {
+		t.Fatalf(ingestErrorMessage, err)
+	}
+	if len(profileSnapshots.snapshots) != 0 {
+		t.Fatalf("snapshots = %+v, want no snapshots", profileSnapshots.snapshots)
+	}
+	if !profileSnapshots.legacyUnavailable {
+		t.Fatal("legacyUnavailable = false, want true")
+	}
+}
+
 func TestIngestPersistsTrackingStateForCurrentIssues(t *testing.T) {
 	t.Parallel()
 
@@ -699,6 +751,14 @@ type replacingSnapshotRepo struct {
 	calls  int
 }
 
+type recordingProfileSnapshotRepo struct {
+	projectID         int64
+	scanID            int64
+	scope             model.AnalysisScope
+	snapshots         []model.ProfileSnapshot
+	legacyUnavailable bool
+}
+
 func (r *replacingSnapshotRepo) Replace(_ context.Context, state *model.CodeSnapshotState) error {
 	if r.states == nil {
 		r.states = map[string]*model.CodeSnapshotState{}
@@ -706,6 +766,23 @@ func (r *replacingSnapshotRepo) Replace(_ context.Context, state *model.CodeSnap
 	r.calls++
 	r.states[storedScopeKey(state.Scope)] = cloneSnapshotState(state)
 	return nil
+}
+
+func (r *recordingProfileSnapshotRepo) Replace(_ context.Context, projectID, scanID int64, scope model.AnalysisScope, snapshots []model.ProfileSnapshot) error {
+	r.projectID = projectID
+	r.scanID = scanID
+	r.scope = scope
+	r.snapshots = append([]model.ProfileSnapshot(nil), snapshots...)
+	r.legacyUnavailable = len(snapshots) == 0
+	return nil
+}
+
+func (r *recordingProfileSnapshotRepo) ListByScan(context.Context, int64) ([]model.ProfileSnapshot, bool, error) {
+	return append([]model.ProfileSnapshot(nil), r.snapshots...), !r.legacyUnavailable, nil
+}
+
+func (r *recordingProfileSnapshotRepo) HashChanges(context.Context, int64, int64) ([]model.ProfileHashChange, error) {
+	return nil, nil
 }
 
 func newTestIssue(ruleKey, path string) *model.Issue {

@@ -15,16 +15,22 @@ import (
 var rulesFS embed.FS
 
 type ruleDetail struct {
-	Key              string   `json:"key"`
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Language         string   `json:"language"`
-	Type             string   `json:"type"`
-	Severity         string   `json:"severity"`
-	Tags             []string `json:"tags,omitempty"`
-	Rationale        string   `json:"rationale,omitempty"`
-	NoncompliantCode string   `json:"noncompliant_code,omitempty"`
-	CompliantCode    string   `json:"compliant_code,omitempty"`
+	Key         string   `json:"key"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Language    string   `json:"language"`
+	Type        string   `json:"type"`
+	Severity    string   `json:"severity"`
+	Tags        []string `json:"tags,omitempty"`
+	Params      []struct {
+		Key          string `json:"key"`
+		Description  string `json:"description"`
+		DefaultValue string `json:"default_value"`
+		Type         string `json:"type"`
+	} `json:"params,omitempty"`
+	Rationale        string `json:"rationale,omitempty"`
+	NoncompliantCode string `json:"noncompliant_code,omitempty"`
+	CompliantCode    string `json:"compliant_code,omitempty"`
 }
 
 // RulesHandler serves rule metadata for the issue detail panel.
