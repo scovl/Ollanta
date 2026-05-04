@@ -10,8 +10,8 @@ import (
 )
 
 func TestCustomRuleAIModelsIncludesMockWhenEnabled(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
 	t.Setenv("OLLANTA_AI_ENABLE_MOCK", "1")
-	t.Setenv("OPENAI_API_KEY", "")
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
@@ -33,7 +33,7 @@ func TestCustomRuleAIModelsIncludesMockWhenEnabled(t *testing.T) {
 }
 
 func TestCustomRuleAIModelsShowsOpenAISetupRequiredWithoutSecret(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearCustomRuleAICloudCredentials(t)
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
@@ -65,7 +65,7 @@ func TestCustomRuleAIModelsShowsOpenAISetupRequiredWithoutSecret(t *testing.T) {
 }
 
 func TestCustomRuleAIModelsUsesCurrentOpenAIDefaults(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
+	clearCustomRuleAICloudCredentials(t)
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
@@ -93,8 +93,123 @@ func TestCustomRuleAIModelsUsesCurrentOpenAIDefaults(t *testing.T) {
 	}
 }
 
+func TestCustomRuleAIModelsValidatesOpenAIModelsEndpoint(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
+	var requestedPath string
+	var requestedAuth string
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			requestedPath = r.URL.Path
+			requestedAuth = r.Header.Get("Authorization")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ai.Close()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("OLLANTA_AI_OPENAI_BASE_URL", ai.URL)
+	t.Setenv("OLLANTA_AI_OLLAMA_BASE_URL", ai.URL)
+
+	rec := httptest.NewRecorder()
+	NewCustomRuleAIHandler().Models(rec, httptest.NewRequest(http.MethodGet, "/api/v1/custom-rules/ai/models", nil))
+
+	var response struct {
+		Providers []customRuleAIProviderOption `json:"providers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	provider := findAIProvider(response.Providers, customRuleAIProviderOpenAI)
+	if provider == nil {
+		t.Fatalf("providers = %+v, want openai", response.Providers)
+	}
+	if requestedPath != "/models" || requestedAuth != "Bearer test-key" {
+		t.Fatalf("models probe path/auth = %q/%q", requestedPath, requestedAuth)
+	}
+	if provider.Status != customRuleAIProviderStatusReady || !provider.Configured || provider.SetupRequired {
+		t.Fatalf("provider = %+v, want connected openai after models probe", *provider)
+	}
+}
+
+func TestCustomRuleAIModelsMarksOpenAIUnavailableWhenModelsEndpoint404s(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			http.NotFound(w, r)
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ai.Close()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("OLLANTA_AI_OPENAI_BASE_URL", ai.URL)
+	t.Setenv("OLLANTA_AI_OLLAMA_BASE_URL", ai.URL)
+
+	rec := httptest.NewRecorder()
+	NewCustomRuleAIHandler().Models(rec, httptest.NewRequest(http.MethodGet, "/api/v1/custom-rules/ai/models", nil))
+
+	var response struct {
+		Providers []customRuleAIProviderOption `json:"providers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	provider := findAIProvider(response.Providers, customRuleAIProviderOpenAI)
+	if provider == nil {
+		t.Fatalf("providers = %+v, want openai", response.Providers)
+	}
+	if provider.Status != customRuleAIProviderStatusDown || provider.Configured || !provider.SetupRequired {
+		t.Fatalf("provider = %+v, want unavailable openai after 404", *provider)
+	}
+	if len(provider.Diagnostics) == 0 || !strings.Contains(provider.Diagnostics[0], "404") {
+		t.Fatalf("diagnostics = %+v, want 404 diagnostic", provider.Diagnostics)
+	}
+}
+
+func TestCustomRuleAIModelsKeepsOpenAISetupRequiredWhenCredentialsRejected(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			http.Error(w, "bad key", http.StatusUnauthorized)
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ai.Close()
+	t.Setenv("OPENAI_API_KEY", "bad-key")
+	t.Setenv("OLLANTA_AI_OPENAI_BASE_URL", ai.URL)
+	t.Setenv("OLLANTA_AI_OLLAMA_BASE_URL", ai.URL)
+
+	rec := httptest.NewRecorder()
+	NewCustomRuleAIHandler().Models(rec, httptest.NewRequest(http.MethodGet, "/api/v1/custom-rules/ai/models", nil))
+
+	var response struct {
+		Providers []customRuleAIProviderOption `json:"providers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	provider := findAIProvider(response.Providers, customRuleAIProviderOpenAI)
+	if provider == nil {
+		t.Fatalf("providers = %+v, want openai", response.Providers)
+	}
+	if provider.Status != customRuleAIProviderStatusSetup || provider.Configured || !provider.SetupRequired {
+		t.Fatalf("provider = %+v, want setup-required openai after 401", *provider)
+	}
+}
+
 func TestCustomRuleAIModelsIncludesAnthropicClaudeDefaults(t *testing.T) {
-	t.Setenv("ANTHROPIC_API_KEY", "")
+	clearCustomRuleAICloudCredentials(t)
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
@@ -128,11 +243,52 @@ func TestCustomRuleAIModelsIncludesAnthropicClaudeDefaults(t *testing.T) {
 	}
 }
 
+func TestCustomRuleAIModelsValidatesAnthropicModelsEndpoint(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
+	var requestedPath string
+	var requestedKey string
+	var requestedVersion string
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			requestedPath = r.URL.Path
+			requestedKey = r.Header.Get(customRuleAIHeaderAnthropicKey)
+			requestedVersion = r.Header.Get(customRuleAIHeaderAnthropicVersion)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ai.Close()
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	t.Setenv("OLLANTA_AI_ANTHROPIC_BASE_URL", ai.URL)
+	t.Setenv("OLLANTA_AI_OLLAMA_BASE_URL", ai.URL)
+
+	rec := httptest.NewRecorder()
+	NewCustomRuleAIHandler().Models(rec, httptest.NewRequest(http.MethodGet, "/api/v1/custom-rules/ai/models", nil))
+
+	var response struct {
+		Providers []customRuleAIProviderOption `json:"providers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	provider := findAIProvider(response.Providers, customRuleAIProviderAnthropic)
+	if provider == nil {
+		t.Fatalf("providers = %+v, want anthropic", response.Providers)
+	}
+	if requestedPath != "/models" || requestedKey != "test-key" || requestedVersion != customRuleAIDefaultAnthropicVersion {
+		t.Fatalf("models probe path/key/version = %q/%q/%q", requestedPath, requestedKey, requestedVersion)
+	}
+	if provider.Status != customRuleAIProviderStatusReady || !provider.Configured || provider.SetupRequired {
+		t.Fatalf("provider = %+v, want connected anthropic after models probe", *provider)
+	}
+}
+
 func TestCustomRuleAIModelsIncludesKimiAndQwenDefaults(t *testing.T) {
-	t.Setenv("MOONSHOT_API_KEY", "")
-	t.Setenv("KIMI_API_KEY", "")
-	t.Setenv("DASHSCOPE_API_KEY", "")
-	t.Setenv("QWEN_API_KEY", "")
+	clearCustomRuleAICloudCredentials(t)
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
@@ -175,7 +331,56 @@ func TestCustomRuleAIModelsIncludesKimiAndQwenDefaults(t *testing.T) {
 	}
 }
 
+func TestCustomRuleAIModelsValidatesOpenAICompatibleCloudProviders(t *testing.T) {
+	assertCustomRuleAIModelsValidatesOpenAICompatibleCloudProvider(t, customRuleAIProviderKimi, "MOONSHOT_API_KEY", "OLLANTA_AI_KIMI_BASE_URL")
+	assertCustomRuleAIModelsValidatesOpenAICompatibleCloudProvider(t, customRuleAIProviderQwen, "DASHSCOPE_API_KEY", "OLLANTA_AI_QWEN_BASE_URL")
+}
+
+func assertCustomRuleAIModelsValidatesOpenAICompatibleCloudProvider(t *testing.T, providerID, keyEnv, baseURLEnv string) {
+	t.Helper()
+	clearCustomRuleAICloudCredentials(t)
+	var requestedPath string
+	var requestedAuth string
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			requestedPath = r.URL.Path
+			requestedAuth = r.Header.Get("Authorization")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ai.Close()
+	t.Setenv(keyEnv, "test-key")
+	t.Setenv(baseURLEnv, ai.URL)
+	t.Setenv("OLLANTA_AI_OLLAMA_BASE_URL", ai.URL)
+
+	rec := httptest.NewRecorder()
+	NewCustomRuleAIHandler().Models(rec, httptest.NewRequest(http.MethodGet, "/api/v1/custom-rules/ai/models", nil))
+
+	var response struct {
+		Providers []customRuleAIProviderOption `json:"providers"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	provider := findAIProvider(response.Providers, providerID)
+	if provider == nil {
+		t.Fatalf("providers = %+v, want %s", response.Providers, providerID)
+	}
+	if requestedPath != "/models" || requestedAuth != "Bearer test-key" {
+		t.Fatalf("models probe path/auth = %q/%q", requestedPath, requestedAuth)
+	}
+	if provider.Status != customRuleAIProviderStatusReady || !provider.Configured || provider.SetupRequired {
+		t.Fatalf("provider = %+v, want connected %s after models probe", *provider, providerID)
+	}
+}
+
 func TestCustomRuleAIModelsDiscoversOllamaModels(t *testing.T) {
+	clearCustomRuleAICloudCredentials(t)
 	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/tags" {
 			t.Fatalf("path = %s, want /api/tags", r.URL.Path)
@@ -522,4 +727,11 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func clearCustomRuleAICloudCredentials(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY", "KIMI_API_KEY", "DASHSCOPE_API_KEY", "QWEN_API_KEY"} {
+		t.Setenv(key, "")
+	}
 }
