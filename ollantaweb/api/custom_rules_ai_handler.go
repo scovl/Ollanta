@@ -99,6 +99,15 @@ type customRuleAICloudChatProviderConfig struct {
 	SetupMessage   string
 }
 
+type customRuleAIProviderProbeError struct {
+	Message       string
+	SetupRequired bool
+}
+
+func (e customRuleAIProviderProbeError) Error() string {
+	return e.Message
+}
+
 type customRuleAISuggestRequest struct {
 	Provider string                   `json:"provider"`
 	Model    string                   `json:"model"`
@@ -197,39 +206,10 @@ func (h *CustomRuleAIHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CustomRuleAIHandler) customRuleAIProviders(ctx context.Context) []customRuleAIProviderOption {
-	models := customRuleAIModelListEnv("OLLANTA_AI_OPENAI_MODELS", customRuleAIDefaultOpenAIModels)
-	defaultModel := customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_MODEL", customRuleAIDefaultOpenAIModel)
-	if !customRuleAIContains(models, defaultModel) {
-		models = append([]string{defaultModel}, models...)
-	}
-	openAIConfigured := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != ""
-	openAIStatus := customRuleAIProviderStatusSetup
-	openAIMessage := "Connect an OpenAI-compatible provider before using these models."
-	if openAIConfigured {
-		openAIStatus = customRuleAIProviderStatusReady
-		openAIMessage = customRuleAIReadyMessage
-	}
-
-	baseURL := customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_BASE_URL", customRuleAIDefaultOpenAIBaseURL)
-	providers := []customRuleAIProviderOption{{
-		ID:             customRuleAIProviderOpenAI,
-		Label:          customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_LABEL", "OpenAI"),
-		Kind:           "cloud",
-		Status:         openAIStatus,
-		Models:         models,
-		ModelOptions:   customRuleAIModelOptions(models, openAIStatus, false, openAIMessage),
-		DefaultModel:   defaultModel,
-		Configured:     openAIConfigured,
-		SetupRequired:  !openAIConfigured,
-		RequiresAPIKey: true,
-		Local:          false,
-		SetupURL:       customRuleAISetupURL,
-		Message:        openAIMessage,
-		BaseURL:        baseURL,
-	}}
-	providers = append(providers, h.anthropicProvider())
-	providers = append(providers, h.kimiProvider())
-	providers = append(providers, h.qwenProvider())
+	providers := []customRuleAIProviderOption{h.openAIProvider(ctx)}
+	providers = append(providers, h.anthropicProvider(ctx))
+	providers = append(providers, h.kimiProvider(ctx))
+	providers = append(providers, h.qwenProvider(ctx))
 	providers = append(providers, h.ollamaProvider(ctx))
 
 	if os.Getenv("OLLANTA_AI_ENABLE_MOCK") == "1" {
@@ -251,40 +231,36 @@ func (h *CustomRuleAIHandler) customRuleAIProviders(ctx context.Context) []custo
 	return providers
 }
 
-func (h *CustomRuleAIHandler) anthropicProvider() customRuleAIProviderOption {
+func (h *CustomRuleAIHandler) openAIProvider(ctx context.Context) customRuleAIProviderOption {
+	models := customRuleAIModelListEnv("OLLANTA_AI_OPENAI_MODELS", customRuleAIDefaultOpenAIModels)
+	defaultModel := customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_MODEL", customRuleAIDefaultOpenAIModel)
+	if !customRuleAIContains(models, defaultModel) {
+		models = append([]string{defaultModel}, models...)
+	}
+	baseURL := customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_BASE_URL", customRuleAIDefaultOpenAIBaseURL)
+	provider := customRuleAICloudProviderOption(customRuleAIProviderOpenAI, customRuleAIEnvOrDefault("OLLANTA_AI_OPENAI_LABEL", "OpenAI"), models, defaultModel, baseURL, "Connect an OpenAI-compatible provider before using these models.")
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	return h.withCloudProviderHealth(ctx, provider, apiKey, func(ctx context.Context) error {
+		return h.probeOpenAICompatibleModels(ctx, baseURL, apiKey)
+	})
+}
+
+func (h *CustomRuleAIHandler) anthropicProvider(ctx context.Context) customRuleAIProviderOption {
 	models := customRuleAIModelListEnv("OLLANTA_AI_ANTHROPIC_MODELS", customRuleAIDefaultAnthropicModels)
 	defaultModel := customRuleAIEnvOrDefault("OLLANTA_AI_ANTHROPIC_MODEL", customRuleAIDefaultAnthropicModel)
 	if !customRuleAIContains(models, defaultModel) {
 		models = append([]string{defaultModel}, models...)
 	}
-	configured := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")) != ""
-	status := customRuleAIProviderStatusSetup
-	message := "Connect Anthropic Claude before using these models."
-	if configured {
-		status = customRuleAIProviderStatusReady
-		message = customRuleAIReadyMessage
-	}
 	baseURL := customRuleAIEnvOrDefault("OLLANTA_AI_ANTHROPIC_BASE_URL", customRuleAIDefaultAnthropicBaseURL)
-	return customRuleAIProviderOption{
-		ID:             customRuleAIProviderAnthropic,
-		Label:          customRuleAIEnvOrDefault("OLLANTA_AI_ANTHROPIC_LABEL", "Anthropic Claude"),
-		Kind:           "cloud",
-		Status:         status,
-		Models:         models,
-		ModelOptions:   customRuleAIModelOptions(models, status, false, message),
-		DefaultModel:   defaultModel,
-		Configured:     configured,
-		SetupRequired:  !configured,
-		RequiresAPIKey: true,
-		Local:          false,
-		SetupURL:       customRuleAISetupURL,
-		Message:        message,
-		BaseURL:        baseURL,
-	}
+	provider := customRuleAICloudProviderOption(customRuleAIProviderAnthropic, customRuleAIEnvOrDefault("OLLANTA_AI_ANTHROPIC_LABEL", "Anthropic Claude"), models, defaultModel, baseURL, "Connect Anthropic Claude before using these models.")
+	apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
+	return h.withCloudProviderHealth(ctx, provider, apiKey, func(ctx context.Context) error {
+		return h.probeAnthropicModels(ctx, baseURL, apiKey)
+	})
 }
 
-func (h *CustomRuleAIHandler) kimiProvider() customRuleAIProviderOption {
-	return customRuleAICloudChatProvider(customRuleAICloudChatProviderConfig{
+func (h *CustomRuleAIHandler) kimiProvider(ctx context.Context) customRuleAIProviderOption {
+	return h.customRuleAICloudChatProvider(ctx, customRuleAICloudChatProviderConfig{
 		ID:             customRuleAIProviderKimi,
 		LabelEnv:       "OLLANTA_AI_KIMI_LABEL",
 		LabelFallback:  "Kimi K2",
@@ -299,8 +275,8 @@ func (h *CustomRuleAIHandler) kimiProvider() customRuleAIProviderOption {
 	})
 }
 
-func (h *CustomRuleAIHandler) qwenProvider() customRuleAIProviderOption {
-	return customRuleAICloudChatProvider(customRuleAICloudChatProviderConfig{
+func (h *CustomRuleAIHandler) qwenProvider(ctx context.Context) customRuleAIProviderOption {
+	return h.customRuleAICloudChatProvider(ctx, customRuleAICloudChatProviderConfig{
 		ID:             customRuleAIProviderQwen,
 		LabelEnv:       "OLLANTA_AI_QWEN_LABEL",
 		LabelFallback:  "Qwen",
@@ -315,36 +291,98 @@ func (h *CustomRuleAIHandler) qwenProvider() customRuleAIProviderOption {
 	})
 }
 
-func customRuleAICloudChatProvider(config customRuleAICloudChatProviderConfig) customRuleAIProviderOption {
+func (h *CustomRuleAIHandler) customRuleAICloudChatProvider(ctx context.Context, config customRuleAICloudChatProviderConfig) customRuleAIProviderOption {
 	models := customRuleAIModelListEnv(config.ModelsEnv, config.FallbackModels)
 	selectedModel := customRuleAIEnvOrDefault(config.ModelEnv, config.DefaultModel)
 	if !customRuleAIContains(models, selectedModel) {
 		models = append([]string{selectedModel}, models...)
 	}
-	configured := customRuleAIEnvFirst(config.APIKeyEnvs...) != ""
-	status := customRuleAIProviderStatusSetup
-	message := config.SetupMessage
-	if configured {
-		status = customRuleAIProviderStatusReady
-		message = customRuleAIReadyMessage
-	}
 	baseURL := customRuleAIEnvOrDefault(config.BaseURLEnv, config.DefaultBaseURL)
+	provider := customRuleAICloudProviderOption(config.ID, customRuleAIEnvOrDefault(config.LabelEnv, config.LabelFallback), models, selectedModel, baseURL, config.SetupMessage)
+	apiKey := customRuleAIEnvFirst(config.APIKeyEnvs...)
+	return h.withCloudProviderHealth(ctx, provider, apiKey, func(ctx context.Context) error {
+		return h.probeOpenAICompatibleModels(ctx, baseURL, apiKey)
+	})
+}
+
+func customRuleAICloudProviderOption(id, label string, models []string, defaultModel, baseURL, setupMessage string) customRuleAIProviderOption {
 	return customRuleAIProviderOption{
-		ID:             config.ID,
-		Label:          customRuleAIEnvOrDefault(config.LabelEnv, config.LabelFallback),
+		ID:             id,
+		Label:          label,
 		Kind:           "cloud",
-		Status:         status,
+		Status:         customRuleAIProviderStatusSetup,
 		Models:         models,
-		ModelOptions:   customRuleAIModelOptions(models, status, false, message),
-		DefaultModel:   selectedModel,
-		Configured:     configured,
-		SetupRequired:  !configured,
+		ModelOptions:   customRuleAIModelOptions(models, customRuleAIProviderStatusSetup, false, setupMessage),
+		DefaultModel:   defaultModel,
+		Configured:     false,
+		SetupRequired:  true,
 		RequiresAPIKey: true,
 		Local:          false,
 		SetupURL:       customRuleAISetupURL,
-		Message:        message,
+		Message:        setupMessage,
 		BaseURL:        baseURL,
 	}
+}
+
+func (h *CustomRuleAIHandler) withCloudProviderHealth(ctx context.Context, provider customRuleAIProviderOption, apiKey string, probe func(context.Context) error) customRuleAIProviderOption {
+	if strings.TrimSpace(apiKey) == "" {
+		return provider
+	}
+	if err := probe(ctx); err != nil {
+		provider.Configured = false
+		provider.SetupRequired = true
+		provider.Status = customRuleAIProviderStatusDown
+		provider.Message = "Configured provider is not reachable."
+		var probeErr customRuleAIProviderProbeError
+		if errors.As(err, &probeErr) && probeErr.SetupRequired {
+			provider.Status = customRuleAIProviderStatusSetup
+			provider.Message = "Provider rejected the configured credentials."
+		}
+		provider.Diagnostics = []string{err.Error()}
+		provider.ModelOptions = customRuleAIModelOptions(provider.Models, provider.Status, provider.Local, provider.Message)
+		return provider
+	}
+	provider.Status = customRuleAIProviderStatusReady
+	provider.Configured = true
+	provider.SetupRequired = false
+	provider.Message = customRuleAIReadyMessage
+	provider.ModelOptions = customRuleAIModelOptions(provider.Models, provider.Status, provider.Local, provider.Message)
+	return provider
+}
+
+func (h *CustomRuleAIHandler) probeOpenAICompatibleModels(ctx context.Context, baseURL, apiKey string) error {
+	return h.probeAIModelsEndpoint(ctx, strings.TrimRight(baseURL, "/")+"/models", map[string]string{"Authorization": "Bearer " + apiKey})
+}
+
+func (h *CustomRuleAIHandler) probeAnthropicModels(ctx context.Context, baseURL, apiKey string) error {
+	return h.probeAIModelsEndpoint(ctx, strings.TrimRight(baseURL, "/")+"/models", map[string]string{
+		customRuleAIHeaderAnthropicKey:     apiKey,
+		customRuleAIHeaderAnthropicVersion: customRuleAIEnvOrDefault("OLLANTA_AI_ANTHROPIC_VERSION", customRuleAIDefaultAnthropicVersion),
+	})
+}
+
+func (h *CustomRuleAIHandler) probeAIModelsEndpoint(ctx context.Context, endpoint string, headers map[string]string) error {
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return customRuleAIProviderProbeError{Message: "build provider model check: " + err.Error()}
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return customRuleAIProviderProbeError{Message: "provider model check failed: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return customRuleAIProviderProbeError{Message: fmt.Sprintf("provider model check returned %d; verify credentials", resp.StatusCode), SetupRequired: true}
+	}
+	return customRuleAIProviderProbeError{Message: fmt.Sprintf("provider model check returned %d from %s", resp.StatusCode, endpoint)}
 }
 
 func (h *CustomRuleAIHandler) ollamaProvider(ctx context.Context) customRuleAIProviderOption {
