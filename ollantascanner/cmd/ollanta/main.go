@@ -34,15 +34,15 @@ func printRunPlan(opts *scan.ScanOptions) {
 	if sources == "" {
 		sources = "./..."
 	}
-	fmt.Printf("Scanning %s (sources: %s)\n", opts.ProjectDir, sources)
+	slog.Info("scan plan", "project", opts.ProjectDir, "sources", sources)
 	if opts.Tests.Enabled {
-		fmt.Printf("Collecting test signals (%d configured module(s))\n", len(opts.Tests.Modules))
+		slog.Info("test signals enabled", "modules", len(opts.Tests.Modules))
 	}
 	if opts.Server != "" {
-		fmt.Printf("Will push results to %s\n", opts.Server)
+		slog.Info("will push results to server", "server", opts.Server)
 	}
 	if opts.Serve {
-		fmt.Printf("Will open local UI on %s:%d\n", opts.Bind, opts.Port)
+		slog.Info("will open local UI", "bind", opts.Bind, "port", opts.Port)
 	}
 }
 
@@ -82,7 +82,7 @@ func main() {
 func mustParseOptions() *scan.ScanOptions {
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		slog.Error("parse options", "error", err)
 		os.Exit(2)
 	}
 	return opts
@@ -90,13 +90,13 @@ func mustParseOptions() *scan.ScanOptions {
 
 func mustRunScan(opts *scan.ScanOptions) *scan.Report {
 	started := time.Now()
-	fmt.Println("Analyzing source files...")
+	slog.Info("analyzing source files")
 	r, err := scan.Run(context.Background(), opts)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "scan error:", err)
+		slog.Error("scan failed", "error", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Analysis completed in %.1fs\n", time.Since(started).Seconds())
+	slog.Info("analysis completed", "duration_seconds", time.Since(started).Seconds())
 	return r
 }
 
@@ -115,19 +115,19 @@ func saveOutputs(opts *scan.ScanOptions, r *scan.Report) {
 func saveJSON(opts *scan.ScanOptions, r *scan.Report) {
 	path, err := r.SaveJSON(opts.ProjectDir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "json error:", err)
+		slog.Error("save JSON report", "error", err)
 		return
 	}
-	fmt.Println("Report saved to", path)
+	slog.Info("report saved", "format", "json", "path", path)
 }
 
 func saveSARIF(opts *scan.ScanOptions, r *scan.Report) {
 	path, err := r.SaveSARIF(opts.ProjectDir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "sarif error:", err)
+		slog.Error("save SARIF report", "error", err)
 		return
 	}
-	fmt.Println("SARIF saved to", path)
+	slog.Info("report saved", "format", "sarif", "path", path)
 }
 
 func serveReport(opts *scan.ScanOptions, reportPath string) {
@@ -135,7 +135,7 @@ func serveReport(opts *scan.ScanOptions, reportPath string) {
 		return
 	}
 	if err := server.Serve(reportPath, opts.Bind, opts.Port); err != nil {
-		fmt.Fprintln(os.Stderr, "server error:", err)
+		slog.Error("local UI server failed", "error", err)
 		os.Exit(1)
 	}
 }
@@ -145,45 +145,70 @@ func handleServerPush(opts *scan.ScanOptions, r *scan.Report) {
 		return
 	}
 
-	fmt.Printf("Pushing report to %s...\n", opts.Server)
+	slog.Info("pushing report to server", "server", opts.Server)
 	result, err := pushReport(opts.Server, opts.ServerToken, r)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: server push failed: %v\n", err)
+		slog.Warn("server push failed", "error", err)
 		return
 	}
 
-	toInt := func(v interface{}) int { f, _ := v.(float64); return int(f) }
 	if gs, ok := result["gate_status"].(string); ok && gs != "" {
-		fmt.Printf("Server: gate=%s new=%d closed=%d\n",
-			result["gate_status"], toInt(result["new_issues"]), toInt(result["closed_issues"]))
+		slog.Info("server response",
+			"gate", gs,
+			"new_issues", responseInt(result, "new_issues"),
+			"closed_issues", responseInt(result, "closed_issues"),
+		)
 		if gs == "ERROR" {
 			os.Exit(1)
 		}
 		return
 	}
 
-	fmt.Printf("Server: accepted job=%d status=%v\n", toInt(result["id"]), result["status"])
+	slog.Info("server accepted job",
+		"job_id", responseInt(result, "id"),
+		"status", result["status"],
+	)
 	if !opts.ServerWait {
 		return
 	}
 
-	jobID := int64(toInt(result["id"]))
+	jobID := int64(responseInt(result, "id"))
 	if jobID == 0 {
-		fmt.Fprintln(os.Stderr, "warning: accepted response did not include a valid scan job id")
+		slog.Error("accepted response did not include a valid scan job id", "response", result)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Waiting for server job %d (timeout %s, poll %s)...\n", jobID, opts.WaitTimeout, opts.WaitPoll)
+	slog.Info("waiting for server job", "job_id", jobID, "timeout", opts.WaitTimeout, "poll", opts.WaitPoll)
 	finalScan, err := waitForServerJob(opts.Server, opts.ServerToken, jobID, opts.WaitTimeout, opts.WaitPoll)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: waiting for server job failed: %v\n", err)
+		slog.Error("waiting for server job failed", "job_id", jobID, "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Server: gate=%s new=%d closed=%d\n", finalScan.GateStatus, finalScan.NewIssues, finalScan.ClosedIssues)
+	slog.Info("server scan completed",
+		"gate", finalScan.GateStatus,
+		"new_issues", finalScan.NewIssues,
+		"closed_issues", finalScan.ClosedIssues,
+	)
 	if finalScan.GateStatus == "ERROR" {
 		os.Exit(1)
 	}
+}
+
+// responseInt extracts a numeric field from a JSON-decoded response map.
+// JSON numbers decode to float64; missing/non-numeric values return 0 and
+// are logged so silent metric loss is visible in operator logs.
+func responseInt(result map[string]interface{}, key string) int {
+	raw, present := result[key]
+	if !present {
+		return 0
+	}
+	f, ok := raw.(float64)
+	if !ok {
+		slog.Warn("server response field is not numeric", "key", key, "value", raw)
+		return 0
+	}
+	return int(f)
 }
 
 // pushReport POSTs the scan report to the given server URL and returns the parsed response body.
@@ -285,14 +310,14 @@ func waitForServerJob(serverURL, token string, jobID int64, timeout, poll time.D
 }
 
 func printServerJobStatus(jobID int64, job *serverScanJob) {
-	fmt.Printf("Server job %d: status=%s", jobID, job.Status)
+	attrs := []any{"job_id", jobID, "status", job.Status}
 	if job.ScanID != nil {
-		fmt.Printf(" scan=%d", *job.ScanID)
+		attrs = append(attrs, "scan_id", *job.ScanID)
 	}
 	if job.LastError != "" {
-		fmt.Printf(" error=%q", job.LastError)
+		attrs = append(attrs, "last_error", job.LastError)
 	}
-	fmt.Println()
+	slog.Info("server job status", attrs...)
 }
 
 func completedServerJobResult(serverURL, token string, jobID int64, job *serverScanJob) (*serverScanResult, bool, error) {
