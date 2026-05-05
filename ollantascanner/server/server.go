@@ -57,11 +57,15 @@ func Serve(reportPath, bind string, port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			logger.Error("write healthz response", "error", err)
+		}
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			logger.Error("write readyz response", "error", err)
+		}
 	})
 	mux.HandleFunc("/metrics", metricsReg.Handler())
 
@@ -78,18 +82,24 @@ func Serve(reportPath, bind string, port int) error {
 		if key == "" {
 			w.Header().Set(contentTypeHeader, jsonContentType)
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = fmt.Fprint(w, `{"error":"missing rule key"}`)
+			if _, err := fmt.Fprint(w, `{"error":"missing rule key"}`); err != nil {
+				logger.Error("write rules error response", "error", err)
+			}
 			return
 		}
 		rule, ok := rules[key]
 		if !ok {
 			w.Header().Set(contentTypeHeader, jsonContentType)
 			w.WriteHeader(http.StatusNotFound)
-			_, _ = fmt.Fprint(w, `{"error":"rule not found"}`)
+			if _, err := fmt.Fprint(w, `{"error":"rule not found"}`); err != nil {
+				logger.Error("write rules error response", "error", err)
+			}
 			return
 		}
 		w.Header().Set(contentTypeHeader, jsonContentType)
-		_ = json.NewEncoder(w).Encode(rule)
+		if err := json.NewEncoder(w).Encode(rule); err != nil {
+			logger.Error("encode rule response", "key", key, "error", err)
+		}
 	})
 	mux.HandleFunc("/api/ai/agents", aiFixService.handleAgents)
 	mux.HandleFunc("/api/ai/providers", aiFixService.handleProviders)
@@ -112,7 +122,9 @@ func Serve(reportPath, bind string, port int) error {
 		}
 		w.Header().Set(contentTypeHeader, jsonContentType)
 		w.Header().Set(cacheControlHeader, "no-cache")
-		_, _ = w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			logger.Error("write report.json response", "error", err)
+		}
 	})
 	mux.HandleFunc("/api/files/source", handleSourceFile(projectRoot))
 
@@ -129,8 +141,7 @@ func Serve(reportPath, bind string, port int) error {
 	}
 
 	url := fmt.Sprintf("http://%s", ln.Addr())
-	logger.Info("Ollanta UI ready", "url", url)
-	fmt.Printf("\nOpening report at %s\n(press Ctrl+C to stop)\n\n", url)
+	logger.Info("Ollanta UI ready", "url", url, "hint", "press Ctrl+C to stop")
 
 	srv := &http.Server{
 		Handler:      telemetry.WrapHTTPHandler("ollantascanner", telemetry.TraceIDMiddleware(withObservability(mux, appMetrics))),
@@ -158,7 +169,7 @@ func listenWithLocalFallback(bind string, port int) (net.Listener, error) {
 		candidateAddr := fmt.Sprintf("%s:%d", bind, candidate)
 		ln, listenErr := net.Listen("tcp", candidateAddr)
 		if listenErr == nil {
-			fmt.Fprintf(os.Stderr, "warning: %s is already in use; using %s instead\n", addr, candidateAddr)
+			slog.Warn("port already in use; using fallback", "requested", addr, "using", candidateAddr)
 			return ln, nil
 		}
 		if !isAddrInUse(listenErr) {
