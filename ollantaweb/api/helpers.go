@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/scovl/ollanta/ollantastore/postgres"
 )
 
 // jsonOK writes a JSON response with the given status code.
@@ -30,4 +32,13 @@ func routeParam(r *http.Request, name string) string {
 // parseID extracts and parses an int64 route parameter.
 func parseID(r *http.Request, name string) (int64, error) {
 	return strconv.ParseInt(routeParam(r, name), 10, 64)
+}
+
+// handleNotFound writes a 404 JSON response and returns true if err is ErrNotFound.
+func handleNotFound(w http.ResponseWriter, err error, message string) bool {
+	if errors.Is(err, postgres.ErrNotFound) {
+		jsonError(w, http.StatusNotFound, message)
+		return true
+	}
+	return false
 }
