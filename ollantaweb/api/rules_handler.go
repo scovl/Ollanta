@@ -1,20 +1,16 @@
 package api
 
 import (
-	"embed"
-	"encoding/json"
-	"io/fs"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/scovl/ollanta/domain/model"
+	coredomain "github.com/scovl/ollanta/ollantacore/domain"
+	"github.com/scovl/ollanta/ollantacore/rulecatalog"
 	"github.com/scovl/ollanta/ollantastore/postgres"
 )
-
-//go:embed rules_data
-var rulesFS embed.FS
 
 type ruleDetail struct {
 	Key         string   `json:"key"`
@@ -46,25 +42,46 @@ type RulesHandler struct {
 	customRules *postgres.CustomRuleRepository
 }
 
-// NewRulesHandler creates a RulesHandler by loading embedded rule JSON files.
+// NewRulesHandler creates a RulesHandler by loading bundled rule metadata from the CGo-free catalog.
 func NewRulesHandler(customRules *postgres.CustomRuleRepository) *RulesHandler {
 	h := &RulesHandler{byKey: make(map[string]*ruleDetail), customRules: customRules}
-	_ = fs.WalkDir(rulesFS, "rules_data", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") {
-			return nil
-		}
-		data, err := fs.ReadFile(rulesFS, path)
-		if err != nil {
-			return nil
-		}
-		var r ruleDetail
-		if json.Unmarshal(data, &r) == nil && r.Key != "" {
-			h.byKey[r.Key] = &r
-			h.all = append(h.all, &r)
-		}
-		return nil
-	})
+	for _, rule := range rulecatalog.Rules() {
+		detail := catalogToDetail(rule)
+		h.byKey[rule.Key] = detail
+		h.all = append(h.all, detail)
+	}
 	return h
+}
+
+func catalogToDetail(rule *coredomain.Rule) *ruleDetail {
+	params := make([]struct {
+		Key          string `json:"key"`
+		Description  string `json:"description"`
+		DefaultValue string `json:"default_value"`
+		Type         string `json:"type"`
+	}, 0, len(rule.ParamsSchema))
+	for _, param := range rule.ParamsSchema {
+		params = append(params, struct {
+			Key          string `json:"key"`
+			Description  string `json:"description"`
+			DefaultValue string `json:"default_value"`
+			Type         string `json:"type"`
+		}{Key: param.Key, Description: param.Description, DefaultValue: param.DefaultValue, Type: param.Type})
+	}
+	return &ruleDetail{
+		Key:              rule.Key,
+		Name:             rule.Name,
+		Description:      rule.Description,
+		Language:         rule.Language,
+		Type:             string(rule.Type),
+		Severity:         string(rule.DefaultSeverity),
+		Tags:             rule.Tags,
+		Params:           params,
+		Rationale:        rule.Rationale,
+		NoncompliantCode: rule.NoncompliantCode,
+		CompliantCode:    rule.CompliantCode,
+		Origin:           "bundled",
+	}
 }
 
 // Get handles GET /api/v1/rules/* — returns the full metadata for a single rule.
