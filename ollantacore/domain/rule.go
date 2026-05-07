@@ -38,4 +38,7 @@ type Rule struct {
 	// Threshold is non-nil for metric-threshold rules (MetricHunter pattern).
 	// Nil for pattern-matching rules.
 	Threshold *Threshold `json:"threshold,omitempty"`
+	Rationale        string `json:"rationale,omitempty"`
+	NoncompliantCode string `json:"noncompliant_code,omitempty"`
+	CompliantCode    string `json:"compliant_code,omitempty"`
 }
