@@ -19,8 +19,7 @@ type ProjectScopeHandler struct {
 // Branches handles GET /api/v1/projects/{key}/branches.
 func (h *ProjectScopeHandler) Branches(w http.ResponseWriter, r *http.Request) {
 	project, err := h.projects.GetByKey(r.Context(), routeParam(r, "key"))
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {
@@ -46,8 +45,7 @@ func (h *ProjectScopeHandler) Branches(w http.ResponseWriter, r *http.Request) {
 // PullRequests handles GET /api/v1/projects/{key}/pull-requests.
 func (h *ProjectScopeHandler) PullRequests(w http.ResponseWriter, r *http.Request) {
 	project, err := h.projects.GetByKey(r.Context(), routeParam(r, "key"))
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {
@@ -70,8 +68,7 @@ func (h *ProjectScopeHandler) Information(w http.ResponseWriter, r *http.Request
 		return
 	}
 	resolved, err := resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {
@@ -122,8 +119,7 @@ func (h *ProjectScopeHandler) CodeTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resolved, err := resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {
@@ -176,8 +172,7 @@ func (h *ProjectScopeHandler) CodeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resolved, err := resolveProjectScope(r.Context(), h.projects, h.scans, routeParam(r, "key"), requested)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {
@@ -186,8 +181,7 @@ func (h *ProjectScopeHandler) CodeFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	file, err := h.snapshots.GetFile(r.Context(), resolved.Project.ID, resolved.Scope.Type, resolved.Scope.Key(), path)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "code file not found")
+	if handleNotFound(w, err, "code file not found") {
 		return
 	}
 	if err != nil {

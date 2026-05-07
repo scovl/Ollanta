@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -31,8 +30,7 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 	var projectID int64
 	if key := r.URL.Query().Get("project_key"); key != "" {
 		p, err := h.projects.GetByKey(r.Context(), key)
-		if errors.Is(err, postgres.ErrNotFound) {
-			jsonError(w, http.StatusNotFound, "project not found")
+		if handleNotFound(w, err, "project not found") {
 			return
 		}
 		if err != nil {
@@ -128,8 +126,7 @@ func (h *WebhooksHandler) Test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wh, err := h.webhooks.GetByID(r.Context(), id)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "webhook not found")
+	if handleNotFound(w, err, "webhook not found") {
 		return
 	}
 	if err != nil {

@@ -76,8 +76,7 @@ func (h *ProfilesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.profiles.GetByID(r.Context(), id)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
+	if handleNotFound(w, err, profileNotFoundMessage) {
 		return
 	}
 	if err != nil {
@@ -196,8 +195,7 @@ func (h *ProfilesHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile, err := h.profiles.GetByID(r.Context(), id)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
+	if handleNotFound(w, err, profileNotFoundMessage) {
 		return
 	}
 	if err != nil {
@@ -234,8 +232,7 @@ func (h *ProfilesHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile, err := h.profiles.GetByID(r.Context(), id)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, profileNotFoundMessage)
+	if handleNotFound(w, err, profileNotFoundMessage) {
 		return
 	}
 	if err != nil {
@@ -276,8 +273,7 @@ func (h *ProfilesHandler) Changelog(w http.ResponseWriter, r *http.Request) {
 func (h *ProfilesHandler) AssignToProject(w http.ResponseWriter, r *http.Request) {
 	key := routeParam(r, "key")
 	project, err := h.projects.GetByKey(r.Context(), key)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "project not found")
+	if handleNotFound(w, err, "project not found") {
 		return
 	}
 	if err != nil {

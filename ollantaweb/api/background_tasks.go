@@ -205,8 +205,7 @@ func (h *BackgroundTasksHandler) Summary(w http.ResponseWriter, r *http.Request)
 // Detail handles GET /api/v1/admin/background-tasks/{taskID}.
 func (h *BackgroundTasksHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	task, err := h.loadBackgroundTaskByID(r.Context(), routeParam(r, "taskID"))
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "background task not found")
+	if handleNotFound(w, err, "background task not found") {
 		return
 	}
 	if err != nil {
@@ -233,8 +232,7 @@ func (h *BackgroundTasksHandler) Cancel(w http.ResponseWriter, r *http.Request) 
 
 func (h *BackgroundTasksHandler) runAction(w http.ResponseWriter, r *http.Request, action string) {
 	task, err := h.loadBackgroundTaskByID(r.Context(), routeParam(r, "taskID"))
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "background task not found")
+	if handleNotFound(w, err, "background task not found") {
 		return
 	}
 	if err != nil {

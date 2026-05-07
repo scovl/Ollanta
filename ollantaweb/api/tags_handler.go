@@ -242,7 +242,7 @@ func tagError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, postgres.ErrNotFound) || errors.Is(err, model.ErrNotFound) {
+	if errors.Is(err, postgres.ErrNotFound) {
 		jsonError(w, http.StatusNotFound, "not found")
 		return true
 	}

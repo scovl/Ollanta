@@ -152,8 +152,7 @@ func (h *IssuesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	selection, err := h.resolveScopedIssueSelection(r, f.ProjectID, projectKey)
 	if err != nil {
-		if errors.Is(err, postgres.ErrNotFound) {
-			jsonError(w, http.StatusNotFound, projectNotFoundMessage)
+		if handleNotFound(w, err, projectNotFoundMessage) {
 			return
 		}
 		jsonError(w, http.StatusBadRequest, err.Error())
@@ -210,8 +209,7 @@ func (h *IssuesHandler) Facets(w http.ResponseWriter, r *http.Request) {
 	}
 	selection, err := h.resolveScopedIssueSelection(r, optionalInt64(projectID), q.Get("project_key"))
 	if err != nil {
-		if errors.Is(err, postgres.ErrNotFound) {
-			jsonError(w, http.StatusNotFound, projectNotFoundMessage)
+		if handleNotFound(w, err, projectNotFoundMessage) {
 			return
 		}
 		jsonError(w, http.StatusBadRequest, err.Error())
@@ -234,8 +232,7 @@ func (h *IssuesHandler) Facets(w http.ResponseWriter, r *http.Request) {
 	filter.ProjectID = optionalInt64(projectID)
 	filter.ScanID = optionalInt64(scanID)
 	facets, err := h.issues.FacetsForFilter(r.Context(), filter)
-	if errors.Is(err, postgres.ErrNotFound) {
-		jsonError(w, http.StatusNotFound, "not found")
+	if handleNotFound(w, err, "not found") {
 		return
 	}
 	if err != nil {
@@ -254,7 +251,7 @@ func (h *IssuesHandler) resolveTagFilter(r *http.Request, filter *postgres.Issue
 		*filter.Tag = resolved
 		return nil
 	}
-	if errors.Is(err, postgres.ErrNotFound) || errors.Is(err, model.ErrNotFound) {
+	if errors.Is(err, postgres.ErrNotFound) {
 		normalized := model.NormalizeTagKey(*filter.Tag)
 		*filter.Tag = normalized
 		return nil
@@ -300,8 +297,7 @@ func (h *IssuesHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.issues.Transition(r.Context(), id, userID, toStatus, req.Resolution, req.Comment); err != nil {
-		if errors.Is(err, postgres.ErrNotFound) {
-			jsonError(w, http.StatusNotFound, "issue not found")
+		if handleNotFound(w, err, "issue not found") {
 			return
 		}
 		jsonError(w, http.StatusBadRequest, err.Error())
