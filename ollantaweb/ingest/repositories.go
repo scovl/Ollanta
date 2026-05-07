@@ -18,6 +18,8 @@ var _ port.IScanRepo = (*scanRepoAdapter)(nil)
 var _ port.IScanJobRepo = (*scanJobRepoAdapter)(nil)
 var _ port.IIssueRepo = (*issueRepoAdapter)(nil)
 var _ port.IMeasureRepo = (*measureRepoAdapter)(nil)
+var _ port.ILiveMeasureRepo = (*measureRepoAdapter)(nil)
+var _ port.IDailyAggregateRepo = (*measureRepoAdapter)(nil)
 var _ port.ICodeSnapshotRepo = (*codeSnapshotRepoAdapter)(nil)
 var _ port.IGateRepo = (*gateRepoAdapter)(nil)
 

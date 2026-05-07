@@ -26,6 +26,9 @@ type ProfileRepository struct {
 }
 
 var _ port.IProfileRepo = (*ProfileRepository)(nil)
+var _ port.IProfileRuleRepo = (*ProfileRepository)(nil)
+var _ port.IProjectProfileRepo = (*ProfileRepository)(nil)
+var _ port.IProfileChangelogRepo = (*ProfileRepository)(nil)
 
 // NewProfileRepository creates a ProfileRepository backed by db.
 func NewProfileRepository(db *DB) *ProfileRepository {

@@ -57,6 +57,8 @@ type IIssueRepo interface {
 }
 
 // IMeasureRepo is the outbound port for measure persistence.
+// ILiveMeasureRepo and IDailyAggregateRepo provide segregated views for
+// consumers that only need live measures or daily aggregates.
 type IMeasureRepo interface {
 	BulkInsert(ctx context.Context, measures []model.MeasureRow) error
 	GetLatest(ctx context.Context, projectID int64, metricKey string) (*model.MeasureRow, error)
@@ -64,6 +66,20 @@ type IMeasureRepo interface {
 	UpsertLive(ctx context.Context, projectID, scanID int64, metricKey, componentPath string, value float64) error
 	UpsertLiveBatch(ctx context.Context, projectID, scanID int64, metrics map[string]float64) error
 	GetLive(ctx context.Context, projectID int64) (map[string]float64, error)
+	UpsertDailyAggregate(ctx context.Context, projectID int64, metricKey string, date string, value float64) error
+	UpsertDailyAggregateBatch(ctx context.Context, projectID int64, date string, metrics map[string]float64) error
+	GetDailyAggregates(ctx context.Context, projectID int64, metricKey string, days int) ([]model.TrendPoint, error)
+}
+
+// ILiveMeasureRepo manages live (current project-level) measures.
+type ILiveMeasureRepo interface {
+	UpsertLive(ctx context.Context, projectID, scanID int64, metricKey, componentPath string, value float64) error
+	UpsertLiveBatch(ctx context.Context, projectID, scanID int64, metrics map[string]float64) error
+	GetLive(ctx context.Context, projectID int64) (map[string]float64, error)
+}
+
+// IDailyAggregateRepo manages time-series daily aggregates per metric.
+type IDailyAggregateRepo interface {
 	UpsertDailyAggregate(ctx context.Context, projectID int64, metricKey string, date string, value float64) error
 	UpsertDailyAggregateBatch(ctx context.Context, projectID int64, date string, metrics map[string]float64) error
 	GetDailyAggregates(ctx context.Context, projectID int64, metricKey string, days int) ([]model.TrendPoint, error)
