@@ -471,6 +471,7 @@ function renderCustomRuleBuilder(engines, aiProviders, editingRule, open) {
         <label class="custom-rule-field full"><span>Noncompliant code</span><textarea id="customRuleExample" class="filter-input" style="min-height:60px" placeholder="code that should produce an issue">${escHtml((prefill.examples || []).find(e => !e?.compliant)?.code || prefill.noncompliant_example || '')}</textarea></label>
         <label class="custom-rule-field full"><span>Compliant code</span><textarea id="customRuleCompliantExample" class="filter-input" style="min-height:60px" placeholder="code that should pass">${escHtml((prefill.examples || []).find(e => e?.compliant)?.code || prefill.compliant_example || '')}</textarea></label>
       </div>
+      ${renderCustomRuleAIAssist(aiProviders)}
       <div class="rule-builder-actions">
         <button class="btn btn-primary" id="createCustomRuleBtn" type="button">${escHtml(submitLabel)}</button>
         ${cancelButton}
