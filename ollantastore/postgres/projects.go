@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/scovl/ollanta/domain/model"
 )
 
 // Project is the canonical project record stored in PostgreSQL.
@@ -22,7 +23,7 @@ type Project struct {
 }
 
 // ErrNotFound is returned when a record does not exist.
-var ErrNotFound = errors.New("not found")
+var ErrNotFound = model.ErrNotFound
 
 // ProjectRepository provides CRUD access to the projects table.
 type ProjectRepository struct {
