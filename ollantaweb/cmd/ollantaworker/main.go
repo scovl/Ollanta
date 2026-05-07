@@ -67,13 +67,13 @@ func main() {
 	workerID := fmt.Sprintf("%s-%d", hostname, os.Getpid())
 	metricsReg := telemetry.NewRegistry()
 	appMetrics := telemetry.NewMetrics(metricsReg)
-	appruntime.StartDatabaseMetricsLoop(ctx, db, metricsReg, 30*time.Second)
+	appruntime.StartDatabaseMetricsLoop(ctx, db, metricsReg, cfg.DatabaseMetricsInterval)
 	telemetry.StartAdminServer(ctx, cfg.AdminAddr, metricsReg, appruntime.ReadyCheck(
 		appruntime.NamedHealthCheck{Name: "postgres", Check: db},
 	))
 
 	indexEnqueuer := ingest.NewIndexJobEnqueuer(indexJobRepo)
-	webhookDispatcher := webhook.NewDispatcher(webhookRepo, webhookJobRepo, workerID, appMetrics)
+	webhookDispatcher := webhook.NewDispatcher(webhookRepo, webhookJobRepo, workerID, appMetrics, cfg.WebhookPollDelay, cfg.WebhookClientTimeout, cfg.WebhookRetryDelays)
 	ingest.StartJobRecoveryLoop(ctx, "scan", scanJobRepo, cfg.ScanJobRecovery, appMetrics)
 
 	processor := ingest.NewScanJobProcessor(
@@ -100,7 +100,7 @@ func main() {
 
 	for i := 0; i < wp; i++ {
 		go func(id int) {
-			wrk := ingest.NewScanJobWorker(processor, 100*time.Millisecond, appMetrics)
+			wrk := ingest.NewScanJobWorker(processor, cfg.WorkerPollDelay, appMetrics)
 			slog.Debug("worker goroutine started", "id", id)
 			wrk.Start(ctx)
 		}(i)
@@ -108,43 +108,31 @@ func main() {
 
 	// Heartbeat goroutine
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(cfg.WorkerHeartbeatInterval)
 		defer ticker.Stop()
 		for range ticker.C {
 			_ = scanJobRepo.UpdateHeartbeat(context.Background(), workerID)
 		}
 	}()
 
-	// Stale job recovery
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			n, _ := scanJobRepo.ReclaimStale(context.Background(), 30*time.Second)
-			if n > 0 {
-				slog.Warn("reclaimed stale jobs", "count", n)
-			}
-		}
-	}()
-
 	// Data lifecycle cleanup
 	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
+		ticker := time.NewTicker(cfg.WorkerDataCleanupInterval)
 		defer ticker.Stop()
 		for range ticker.C {
 			ctx := context.Background()
 			pool := db.Pool
-			if tag, err := pool.Exec(ctx, `DELETE FROM scan_jobs WHERE status = 'completed' AND completed_at < now() - interval '7 days'`); err != nil {
+			if tag, err := pool.Exec(ctx, fmt.Sprintf(`DELETE FROM scan_jobs WHERE status = 'completed' AND completed_at < now() - interval '%d seconds'`, int64(cfg.WorkerDataScanJobsRetention.Seconds()))); err != nil {
 				slog.Warn("cleanup scan_jobs failed", "error", err)
 			} else if tag.RowsAffected() > 0 {
 				slog.Info("cleanup scan_jobs", "deleted", tag.RowsAffected())
 			}
-			if tag, err := pool.Exec(ctx, `DELETE FROM scans WHERE created_at < now() - interval '365 days'`); err != nil {
+			if tag, err := pool.Exec(ctx, fmt.Sprintf(`DELETE FROM scans WHERE created_at < now() - interval '%d seconds'`, int64(cfg.WorkerDataScansRetention.Seconds()))); err != nil {
 				slog.Warn("cleanup scans failed", "error", err)
 			} else if tag.RowsAffected() > 0 {
 				slog.Info("cleanup scans", "deleted", tag.RowsAffected())
 			}
-			if tag, err := pool.Exec(ctx, `DELETE FROM measures WHERE created_at < now() - interval '90 days'`); err != nil {
+			if tag, err := pool.Exec(ctx, fmt.Sprintf(`DELETE FROM measures WHERE created_at < now() - interval '%d seconds'`, int64(cfg.WorkerDataMeasuresRetention.Seconds()))); err != nil {
 				slog.Warn("cleanup measures failed", "error", err)
 			} else if tag.RowsAffected() > 0 {
 				slog.Info("cleanup measures", "deleted", tag.RowsAffected())

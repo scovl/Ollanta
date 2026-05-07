@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	telemetry "github.com/scovl/ollanta/adapter/secondary/telemetry"
 	"github.com/scovl/ollanta/ollantastore/postgres"
@@ -57,12 +56,12 @@ func main() {
 	workerID := fmt.Sprintf("%s-%d", hostname, os.Getpid())
 	metricsReg := telemetry.NewRegistry()
 	appMetrics := telemetry.NewMetrics(metricsReg)
-	appruntime.StartDatabaseMetricsLoop(ctx, db, metricsReg, 30*time.Second)
+	appruntime.StartDatabaseMetricsLoop(ctx, db, metricsReg, cfg.DatabaseMetricsInterval)
 	telemetry.StartAdminServer(ctx, cfg.AdminAddr, metricsReg, appruntime.ReadyCheck(
 		appruntime.NamedHealthCheck{Name: "postgres", Check: db},
 	))
 
-	dispatcher := webhook.NewDispatcher(webhookRepo, webhookJobRepo, workerID, appMetrics)
+	dispatcher := webhook.NewDispatcher(webhookRepo, webhookJobRepo, workerID, appMetrics, cfg.WebhookPollDelay, cfg.WebhookClientTimeout, cfg.WebhookRetryDelays)
 	ingest.StartJobRecoveryLoop(ctx, "webhook", webhookJobRepo, cfg.WebhookJobRecovery, appMetrics)
 	slog.Info("started", "worker_id", workerID, "admin_addr", cfg.AdminAddr)
 	dispatcher.Start(ctx)

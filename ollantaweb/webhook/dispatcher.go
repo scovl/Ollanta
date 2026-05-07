@@ -29,9 +29,6 @@ const (
 	EventProjectDeleted = "project.deleted"
 )
 
-// retryDelays defines the exponential back-off schedule (3 attempts).
-var retryDelays = []time.Duration{1 * time.Minute, 5 * time.Minute, 30 * time.Minute}
-
 type webhookStore interface {
 	ForEvent(ctx context.Context, projectID int64, event string) ([]*postgres.Webhook, error)
 	GetByID(ctx context.Context, id int64) (*postgres.Webhook, error)
@@ -50,24 +47,26 @@ type webhookJobStore interface {
 
 // Dispatcher enqueues and delivers webhook jobs using durable PostgreSQL state.
 type Dispatcher struct {
-	repo      webhookStore
-	jobs      webhookJobStore
-	client    *http.Client
-	workerID  string
-	pollDelay time.Duration
-	metrics   *telemetry.Metrics
+	repo        webhookStore
+	jobs        webhookJobStore
+	client      *http.Client
+	workerID    string
+	pollDelay   time.Duration
+	retryDelays []time.Duration
+	metrics     *telemetry.Metrics
 }
 
 // NewDispatcher creates a durable webhook dispatcher.
-func NewDispatcher(repo *postgres.WebhookRepository, jobs *postgres.WebhookJobRepository, workerID string, metrics *telemetry.Metrics) *Dispatcher {
+func NewDispatcher(repo *postgres.WebhookRepository, jobs *postgres.WebhookJobRepository, workerID string, metrics *telemetry.Metrics, pollDelay, clientTimeout time.Duration, retryDelays []time.Duration) *Dispatcher {
 	return &Dispatcher{
-		repo:      repo,
-		jobs:      jobs,
-		workerID:  workerID,
-		pollDelay: time.Second,
-		metrics:   metrics,
+		repo:        repo,
+		jobs:        jobs,
+		workerID:    workerID,
+		pollDelay:   pollDelay,
+		retryDelays: retryDelays,
+		metrics:     metrics,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: clientTimeout,
 		},
 	}
 }
@@ -180,7 +179,7 @@ func (d *Dispatcher) processNext(ctx context.Context) (bool, error) {
 		return d.complete(spanCtx, job, del)
 	}
 
-	if job.Attempts >= len(retryDelays) {
+	if job.Attempts >= len(d.retryDelays) {
 		return d.deadLetter(spanCtx, span, job, del, sendErr)
 	}
 
@@ -240,14 +239,14 @@ func (d *Dispatcher) deadLetter(ctx context.Context, span trace.Span, job *postg
 }
 
 func (d *Dispatcher) retry(ctx context.Context, span trace.Span, job *postgres.WebhookJob, del *postgres.WebhookDelivery, sendErr error) (bool, error) {
-	delay := retryDelays[job.Attempts-1]
+	delay := d.retryDelays[job.Attempts-1]
 	span.RecordError(sendErr)
 	slog.WarnContext(ctx, "webhook delivery failed; retry scheduled",
 		telemetry.WithTraceAttrs(ctx,
 			"webhook_id", job.WebhookID,
 			"event", job.Event,
 			"attempt", job.Attempts,
-			"max_attempts", len(retryDelays),
+			"max_attempts", len(d.retryDelays),
 			"delay", delay.String(),
 			"error", sendErr,
 		)...,

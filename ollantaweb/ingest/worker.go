@@ -45,15 +45,18 @@ func NewWorker(
 	jobs *postgres.IndexJobRepository,
 	workerID string,
 	metrics *telemetry.Metrics,
+	pollDelay time.Duration,
+	maxRetries int,
+	batchSize int,
 ) *Worker {
 	return &Worker{
 		indexer:    indexer,
 		issues:     issues,
 		jobs:       jobs,
 		workerID:   workerID,
-		pollDelay:  time.Second,
-		maxRetries: 3,
-		batchSize:  1000,
+		pollDelay:  pollDelay,
+		maxRetries: maxRetries,
+		batchSize:  batchSize,
 		metrics:    metrics,
 	}
 }
