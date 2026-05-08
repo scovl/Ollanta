@@ -33,7 +33,7 @@
     <!-- ── Quality Gate Hero ──────────────────────────────────────────── -->
     <section id="gate-hero" class="gate-hero gate-loading">
       <div class="gate-badge">
-        <span id="gate-icon" class="gate-icon"></span>
+        <span id="gate-icon" class="gate-icon" role="img" aria-label="Evaluating"></span>
         <div class="gate-text">
           <span class="gate-label">Quality Gate</span>
           <span id="gate-status" class="gate-status">Evaluating…</span>
@@ -43,21 +43,24 @@
     </section>
 
     <!-- ── Tabs ───────────────────────────────────────────────────────── -->
-    <nav class="tabs">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="issues">
+    <div class="tabs" role="tablist" aria-label="Main sections">
+      <button class="tab active" data-tab="overview" role="tab" aria-selected="true" aria-controls="panel-overview" id="tab-overview">Overview</button>
+      <button class="tab" data-tab="issues" role="tab" aria-selected="false" aria-controls="panel-issues" id="tab-issues">
         Issues <span id="tab-issue-count" class="tab-badge">0</span>
       </button>
-      <button class="tab" data-tab="files">
+      <button class="tab" data-tab="files" role="tab" aria-selected="false" aria-controls="panel-files" id="tab-files">
         Files <span id="tab-file-count" class="tab-badge">0</span>
       </button>
-      <button class="tab" data-tab="coverage">
+      <button class="tab" data-tab="coverage" role="tab" aria-selected="false" aria-controls="panel-coverage" id="tab-coverage">
         Coverage <span id="tab-coverage-count" class="tab-badge">0</span>
       </button>
-    </nav>
+      <button class="tab" data-tab="mutants" role="tab" aria-selected="false" aria-controls="panel-mutants" id="tab-mutants">
+        Mutants <span id="tab-mutant-count" class="tab-badge">0</span>
+      </button>
+    </div>
 
     <!-- ── Overview Tab ───────────────────────────────────────────────── -->
-    <div id="panel-overview" class="panel">
+    <div id="panel-overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
       <div class="overview-layout">
         <section class="overview-main">
           <section class="overview-panel">
@@ -91,6 +94,34 @@
                 <span class="metric-label">Comment Lines</span>
                 <span class="metric-value" id="m-comments">0</span>
               </div>
+              <div id="card-tests" class="metric-row">
+                <span class="metric-label">Tests</span>
+                <span class="metric-value" id="m-tests">0</span>
+              </div>
+              <div id="card-test-failures" class="metric-row">
+                <span class="metric-label">Test Failures</span>
+                <span class="metric-value" id="m-test-failures">0</span>
+              </div>
+              <div id="card-test-skipped" class="metric-row">
+                <span class="metric-label">Tests Skipped</span>
+                <span class="metric-value" id="m-test-skipped">0</span>
+              </div>
+              <div id="card-mutants-skipped" class="metric-row">
+                <span class="metric-label">Mutants Skipped</span>
+                <span class="metric-value" id="m-mutants-skipped">0</span>
+              </div>
+              <div id="card-mutants-error" class="metric-row">
+                <span class="metric-label">Mutant Errors</span>
+                <span class="metric-value" id="m-mutants-error">0</span>
+              </div>
+              <div id="card-duplication" class="metric-row">
+                <span class="metric-label">Duplication</span>
+                <span class="metric-value" id="m-duplication">—</span>
+              </div>
+              <div id="card-test-health" class="metric-row">
+                <span class="metric-label">Test Health</span>
+                <span class="metric-value" id="m-test-health">—</span>
+              </div>
             </div>
           </section>
 
@@ -121,6 +152,9 @@
             <h3>Mutation Testing</h3>
             <div id="mutation-summary" class="mutation-summary"></div>
           </section>
+
+          <section class="overview-panel" id="ts-modules">
+          </section>
         </section>
 
         <aside class="overview-aside">
@@ -137,10 +171,10 @@
     </div>
 
     <!-- ── Issues Tab ─────────────────────────────────────────────────── -->
-    <div id="panel-issues" class="panel hidden">
+    <div id="panel-issues" class="panel hidden" role="tabpanel" aria-labelledby="tab-issues">
       <div class="toolbar">
         <div class="toolbar-left">
-          <input id="search" type="search" placeholder="Search file, message, rule…" autocomplete="off" />
+          <input id="search" type="search" placeholder="Search file, message, rule…" autocomplete="off" aria-label="Search issues" />
           <select id="filter-severity">
             <option value="all">All severities</option>
             <option value="blocker">Blocker</option>
@@ -158,11 +192,23 @@
           <select id="filter-rule">
             <option value="all">All rules</option>
           </select>
+          <select id="filter-quality">
+            <option value="all">All qualities</option>
+            <option value="security">Security</option>
+            <option value="reliability">Reliability</option>
+            <option value="maintainability">Maintainability</option>
+            <option value="testability">Testability</option>
+          </select>
+          <select id="filter-tag">
+            <option value="all">All tags</option>
+          </select>
         </div>
         <div class="toolbar-right">
           <span id="issue-count" class="result-count"></span>
         </div>
       </div>
+
+      <div aria-live="polite" class="visually-hidden" id="filter-announcer"></div>
 
       <!-- Severity chips -->
       <div id="sev-chips" class="sev-chips"></div>
@@ -174,24 +220,32 @@
     </div>
 
     <!-- ── Files Tab ──────────────────────────────────────────────────── -->
-    <div id="panel-files" class="panel hidden">
+    <div id="panel-files" class="panel hidden" role="tabpanel" aria-labelledby="tab-files">
       <div id="file-tree" class="file-tree">
         <div class="empty-state">Loading…</div>
       </div>
     </div>
 
     <!-- ── Coverage Tab ───────────────────────────────────────────────── -->
-    <div id="panel-coverage" class="panel hidden">
+    <div id="panel-coverage" class="panel hidden" role="tabpanel" aria-labelledby="tab-coverage">
       <div id="coverage-details" class="coverage-details">
         <div class="empty-state">No coverage details found</div>
       </div>
     </div>
 
+    <!-- ── Mutants Tab ────────────────────────────────────────────────── -->
+    <div id="panel-mutants" class="panel hidden" role="tabpanel" aria-labelledby="tab-mutants">
+      <div id="mutants-page" class="mutants-page">
+        <div class="empty-state">No mutation data collected. Run with <span class="mono">-with-mutations</span> to see survived mutants.</div>
+      </div>
+    </div>
+
     <!-- ── Issue Detail Panel (slide-out) ─────────────────────────────── -->
-    <aside id="detail-panel" class="detail-panel">
+    <aside id="detail-panel" class="detail-panel" role="dialog" aria-modal="true" aria-label="Issue details">
       <div class="detail-header">
-        <h3 id="detail-title">Issue Details</h3>
-        <button id="detail-close" class="detail-close" aria-label="Close">×</button>
+        <h3 id="detail-title" tabindex="-1">Issue Details</h3>
+        <button id="detailCopy" class="detail-copy" type="button" title="Copy issue details to clipboard"><span class="icon-copy" role="img" aria-label="Copy"></span> Copy</button>
+        <button id="detail-close" class="detail-close" aria-label="Close details">×</button>
       </div>
       <div id="detail-body" class="detail-body"></div>
     </aside>

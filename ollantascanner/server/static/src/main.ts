@@ -18,6 +18,7 @@ let coverageSourceCache = new Map<string, CoverageSourceFile>();
 let selectedIssue: Issue | null = null;
 let selectedIndex = -1;
 let activeTab = "overview";
+let lastFocusedElement: HTMLElement | null = null;
 let detailTab: "details" | "rule" | "ai-fix" = "details";
 let detailRuleHtml = "";
 let detailRuleLoading = false;
@@ -59,7 +60,13 @@ let aiFixState: AIFixPanelState = createEmptyAIFixState();
 let filterSeverity = "all";
 let filterType = "all";
 let filterRule = "all";
+let filterQuality = "all";
+let filterTag = "all";
 let searchText = "";
+
+let mutantFilterModule = "all";
+let mutantSortField: "file" | "line" | "module" = "file";
+let mutantSortDir: "asc" | "desc" = "asc";
 
 const SEV_ORDER: Record<Severity, number> = {
   blocker: 0, critical: 1, major: 2, minor: 3, info: 4,
@@ -74,6 +81,15 @@ const TYPE_LABELS: Record<string, string> = {
   bug: "Bug", code_smell: "Code Smell", vulnerability: "Vulnerability",
   security_hotspot: "Hotspot",
 };
+
+const QUALITY_LABELS: Record<string, string> = {
+  security: "Security", reliability: "Reliability",
+  maintainability: "Maintainability", testability: "Testability",
+};
+
+function iconHtml(name: string, label: string): string {
+  return `<span class="icon-${esc(name)}" role="img" aria-label="${esc(label)}"></span>`;
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // Bootstrap
@@ -95,7 +111,9 @@ async function init(): Promise<void> {
     buildCoverageFiles();
     renderCoverageSummary();
     renderMutationSummary();
+    renderTestSignalModules();
     renderCoverageDetails();
+    renderMutantsTab();
     if (coverageFiles.length) {
       void selectCoverageFile(selectedCoveragePath || coverageFiles[0].path);
     }
@@ -106,10 +124,12 @@ async function init(): Promise<void> {
     renderFileTree();
     setupTabs();
     setupKeyboard();
+    setupMutantFilters();
 
     el("tab-issue-count").textContent = String(allIssues.length);
     el("tab-file-count").textContent = String(new Set(allIssues.map(i => i.component_path)).size);
-    el("tab-coverage-count").textContent = String(coverageFiles.length);
+    el("tab-coverage-count").textContent = formatPercent(report.measures.coverage ?? report.test_signals?.summary?.coverage);
+    el("tab-mutant-count").textContent = String(mutationOverview().survived);
   } catch (e) {
     el("app").innerHTML =
       `<div class="error">Failed to load report: ${String(e)}</div>`;
@@ -137,11 +157,33 @@ function renderHeader(): void {
 
 function computeGate(): GateResult {
   const m = report.measures;
+  const ts = report.test_signals?.summary;
   const conditions: GateCondition[] = [
     { metric: "Bugs", operator: "=", threshold: 0, value: m.bugs, passed: m.bugs === 0 },
     { metric: "Vulnerabilities", operator: "=", threshold: 0, value: m.vulnerabilities, passed: m.vulnerabilities === 0 },
+    { metric: "Code Smells", operator: "\u2264", threshold: 10, value: m.code_smells, passed: m.code_smells <= 10, severity: m.code_smells <= 10 ? undefined : (m.code_smells <= 20 ? "warning" : undefined) },
   ];
-  const status = conditions.every(c => c.passed) ? "passed" : "failed";
+
+  if (m.coverage != null) {
+    conditions.push({ metric: "Coverage", operator: "\u2265", threshold: 70, value: m.coverage, passed: m.coverage >= 70, severity: m.coverage >= 70 ? undefined : (m.coverage >= 60 ? "warning" : undefined) });
+  } else {
+    conditions.push({ metric: "Coverage", operator: "\u2265", threshold: 70, value: 0, passed: false, severity: "missing" });
+  }
+
+  if (ts) {
+    if (ts.tests != null) {
+      conditions.push({ metric: "Test Failures", operator: "=", threshold: 0, value: ts.test_failures ?? 0, passed: (ts.test_failures ?? 0) === 0 });
+    }
+    if (ts.mutation_score != null) {
+      conditions.push({ metric: "Mutation Score", operator: "\u2265", threshold: 60, value: ts.mutation_score, passed: ts.mutation_score >= 60, severity: ts.mutation_score >= 60 ? undefined : (ts.mutation_score >= 40 ? "warning" : undefined) });
+    }
+    if (ts.changed_mutation_score != null) {
+      conditions.push({ metric: "Changed Mutation", operator: "\u2265", threshold: 60, value: ts.changed_mutation_score, passed: ts.changed_mutation_score >= 60, severity: ts.changed_mutation_score >= 60 ? undefined : (ts.changed_mutation_score >= 40 ? "warning" : undefined) });
+    }
+  }
+
+  const failed = conditions.filter(c => !c.passed && c.severity !== "warning" && c.severity !== "missing");
+  const status = failed.length === 0 ? "passed" : "failed";
   return { status, conditions };
 }
 
@@ -151,15 +193,25 @@ function renderGate(): void {
   hero.classList.remove("gate-loading");
   hero.classList.add(gate.status === "passed" ? "gate-passed" : "gate-failed");
 
-  el("gate-icon").textContent = gate.status === "passed" ? "✓" : "✗";
+  const gateIcon = el("gate-icon");
+  gateIcon.className = `gate-icon icon-${gate.status === "passed" ? "pass" : "fail"}`;
+  gateIcon.setAttribute("aria-label", gate.status === "passed" ? "Passed" : "Failed");
   el("gate-status").textContent = gate.status === "passed" ? "Passed" : "Failed";
+  if (gate.status === "passed") {
+    const failedConditions = gate.conditions.filter(c => !c.passed && c.severity !== "warning");
+    const warnings = gate.conditions.filter(c => !c.passed && c.severity === "warning");
+    if (warnings.length && !failedConditions.length) {
+      el("gate-status").textContent = "Passed with warnings";
+      hero.classList.add("gate-warn");
+    }
+  }
 
   const condHtml = gate.conditions.map(c => {
-    const cls = c.passed ? "cond-pass" : "cond-fail";
-    const icon = c.passed ? "✓" : "✗";
+    const cls = c.passed ? "cond-pass" : (c.severity === "warning" ? "cond-warn" : "cond-fail");
+    const icon = c.passed ? iconHtml("pass", "Passed") : iconHtml("fail", "Failed");
     return `<div class="gate-cond ${cls}">
       <span class="gate-cond-icon">${icon}</span>
-      <span class="gate-cond-metric">${esc(c.metric)}</span>
+      <span class="gate-cond-metric">${esc(c.metric)} ${esc(c.operator)} ${c.threshold}</span>
       <span class="gate-cond-value">${c.value}</span>
     </div>`;
   }).join("");
@@ -172,6 +224,7 @@ function renderGate(): void {
 
 function renderMeasures(): void {
   const m = report.measures;
+  const ts = report.test_signals?.summary;
   setMetric("m-bugs", m.bugs);
   setMetric("m-vulns", m.vulnerabilities);
   setMetric("m-smells", m.code_smells);
@@ -180,14 +233,52 @@ function renderMeasures(): void {
   setMetric("m-files", m.files);
   setMetric("m-comments", m.comments);
 
+  if (ts) {
+    setMetric("m-tests", ts.tests ?? 0);
+    setMetric("m-test-failures", ts.test_failures ?? 0);
+    setMetric("m-test-skipped", ts.test_skipped ?? 0);
+    setMetric("m-mutants-skipped", ts.mutants_skipped ?? m.mutants_skipped ?? 0);
+    setMetric("m-mutants-error", ts.mutants_error ?? m.mutants_error ?? 0);
+  } else {
+    setMetric("m-tests", m.tests ?? 0);
+    setMetric("m-test-failures", m.test_failures ?? 0);
+    setMetric("m-test-skipped", m.test_skipped ?? 0);
+    setMetric("m-mutants-skipped", m.mutants_skipped ?? 0);
+    setMetric("m-mutants-error", m.mutants_error ?? 0);
+  }
+
   // Color-code the cards
   colorCard("card-bugs", m.bugs, [0, 1, 5]);
   colorCard("card-vulns", m.vulnerabilities, [0, 1, 3]);
   colorCard("card-smells", m.code_smells, [0, 10, 50]);
   colorCoverageCard("card-coverage", m.coverage);
+  colorInverseCard("card-tests", ts?.tests ?? m.tests, [50, 20, 0]);
+  colorCard("card-test-failures", ts?.test_failures ?? m.test_failures ?? 0, [0, 1, 5]);
   addClass("card-ncloc", "card-neutral");
   addClass("card-files", "card-neutral");
   addClass("card-comments", "card-neutral");
+  addClass("card-test-skipped", "card-neutral");
+  addClass("card-mutants-skipped", "card-neutral");
+  addClass("card-mutants-error", (ts?.mutants_error ?? m.mutants_error ?? 0) > 0 ? "card-red" : "card-neutral");
+
+  const dup = m.duplicated_lines_density;
+  setMetricText("m-duplication", formatPercent(dup));
+  colorCard("card-duplication", dup ?? 0, [3, 10, 20]);
+  addClass("card-duplication", dup == null ? "card-neutral" : "");
+
+  const health = report.test_signals?.health;
+  if (health) {
+    setMetricText("m-test-health", `${health.status} · ${health.score}`);
+    const healthCard = el("card-test-health");
+    healthCard.classList.remove("card-neutral", "card-green", "card-yellow", "card-red");
+    if (health.status === "healthy") healthCard.classList.add("card-green");
+    else if (health.status === "at_risk") healthCard.classList.add("card-red");
+    else if (health.status === "partial") healthCard.classList.add("card-yellow");
+    else healthCard.classList.add("card-neutral");
+  } else {
+    setMetricText("m-test-health", "—");
+    addClass("card-test-health", "card-neutral");
+  }
 
   const coverageCard = el("card-coverage");
   coverageCard.classList.add("clickable");
@@ -218,6 +309,13 @@ function colorCoverageCard(id: string, val: number | undefined): void {
   if (val == null) addClass(id, "card-neutral");
   else if (val >= 80) addClass(id, "card-green");
   else if (val >= 60) addClass(id, "card-yellow");
+  else addClass(id, "card-red");
+}
+
+function colorInverseCard(id: string, val: number | undefined, thresholds: [number, number, number]): void {
+  if (val == null) { addClass(id, "card-neutral"); return; }
+  if (val >= thresholds[0]) addClass(id, "card-green");
+  else if (val >= thresholds[1]) addClass(id, "card-yellow");
   else addClass(id, "card-red");
 }
 
@@ -285,6 +383,181 @@ function mutationScoreClass(score: number | undefined): string {
   if (score >= 80) return "card-green";
   if (score >= 60) return "card-yellow";
   return "card-red";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Mutants Tab (full table with filters + sort)
+// ══════════════════════════════════════════════════════════════════════════
+
+function renderMutantsTab(): void {
+  const container = el("mutants-page");
+  const mutation = mutationOverview();
+  if (!mutation.hasSignal) {
+    container.innerHTML = `<div class="empty-state">No mutation data collected. Run with <span class="mono">-with-mutations</span> to see survived mutants.</div>`;
+    return;
+  }
+
+  const allSurvived = mutation.modules.flatMap(module => (module.mutation?.survived_mutants ?? []).map(m => ({ ...m, moduleName: module.name || module.root })));
+  const modules = [...new Set(allSurvived.map(m => m.moduleName))].sort();
+
+  let display = allSurvived;
+  if (mutantFilterModule !== "all") {
+    display = display.filter(m => m.moduleName === mutantFilterModule);
+  }
+  display.sort((a, b) => {
+    let cmp = 0;
+    if (mutantSortField === "file") cmp = (a.file || "").localeCompare(b.file || "");
+    else if (mutantSortField === "line") cmp = (a.line ?? 0) - (b.line ?? 0);
+    else if (mutantSortField === "module") cmp = a.moduleName.localeCompare(b.moduleName);
+    return mutantSortDir === "asc" ? cmp : -cmp;
+  });
+
+  const toolbarHtml = `
+    <div class="mutants-toolbar">
+      <div class="toolbar-left">
+        <select id="mutant-filter-module">
+          <option value="all">All modules</option>
+          ${modules.map(m => `<option value="${esc(m)}"${m === mutantFilterModule ? " selected" : ""}>${esc(m)}</option>`).join("")}
+        </select>
+        <select id="mutant-sort-field">
+          <option value="file"${mutantSortField === "file" ? " selected" : ""}>Sort by file</option>
+          <option value="line"${mutantSortField === "line" ? " selected" : ""}>Sort by line</option>
+          <option value="module"${mutantSortField === "module" ? " selected" : ""}>Sort by module</option>
+        </select>
+        <select id="mutant-sort-dir">
+          <option value="asc"${mutantSortDir === "asc" ? " selected" : ""}>Ascending</option>
+          <option value="desc"${mutantSortDir === "desc" ? " selected" : ""}>Descending</option>
+        </select>
+      </div>
+      <div class="toolbar-right">
+        <span class="result-count">${display.length.toLocaleString()} survived</span>
+      </div>
+    </div>
+  `;
+
+  const kpisHtml = `
+    <div class="mutation-kpis">
+      <div><span class="mutation-kpi-value ${mutationScoreClass(mutation.score)}">${formatPercent(mutation.score)}</span><span class="mutation-kpi-label">mutation score</span></div>
+      <div><span class="mutation-kpi-value">${mutation.killed.toLocaleString()}/${mutation.total.toLocaleString()}</span><span class="mutation-kpi-label">killed mutants</span></div>
+      <div><span class="mutation-kpi-value ${mutation.survived > 0 ? 'mut-warning' : 'mut-success'}">${mutation.survived.toLocaleString()}</span><span class="mutation-kpi-label">survived mutants</span></div>
+    </div>
+  `;
+
+  let tableHtml = "";
+  if (display.length) {
+    tableHtml = `
+      <table class="mutants-table">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Line</th>
+            <th>Module</th>
+            <th>Mutator</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${display.map(mutant => `
+            <tr class="mutant-row">
+              <td class="mutant-file">${esc(shortenPath(mutant.file || ''))}</td>
+              <td class="mutant-line">${mutant.line ?? '—'}</td>
+              <td class="mutant-module">${esc(mutant.moduleName)}</td>
+              <td class="mutant-mutator">${esc(mutant.mutator || '—')}</td>
+              <td class="mutant-desc">${esc(mutant.description || mutant.replacement || 'survived mutant')}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  } else {
+    tableHtml = `<div class="empty-state compact">No survived mutants match the current filter.</div>`;
+  }
+
+  container.innerHTML = toolbarHtml + kpisHtml + tableHtml;
+
+  // Re-bind filter controls after re-render
+  setupMutantFilters();
+}
+
+function setupMutantFilters(): void {
+  const moduleSel = document.getElementById("mutant-filter-module") as HTMLSelectElement | null;
+  const sortFieldSel = document.getElementById("mutant-sort-field") as HTMLSelectElement | null;
+  const sortDirSel = document.getElementById("mutant-sort-dir") as HTMLSelectElement | null;
+
+  moduleSel?.addEventListener("change", e => {
+    mutantFilterModule = (e.target as HTMLSelectElement).value;
+    renderMutantsTab();
+  });
+  sortFieldSel?.addEventListener("change", e => {
+    mutantSortField = (e.target as HTMLSelectElement).value as "file" | "line" | "module";
+    renderMutantsTab();
+  });
+  sortDirSel?.addEventListener("change", e => {
+    mutantSortDir = (e.target as HTMLSelectElement).value as "asc" | "desc";
+    renderMutantsTab();
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Test Signal Modules
+// ══════════════════════════════════════════════════════════════════════════
+
+function renderTestSignalModules(): void {
+  const modules = report.test_signals?.modules ?? [];
+  if (!modules.length) return;
+
+  const container = el("ts-modules");
+  let html = "";
+
+  for (const module of modules) {
+    const health = module.health;
+    const coverage = module.coverage;
+    const mutation = module.mutation;
+    const suites = module.suites ?? [];
+    const failed = suites.reduce((sum, suite) => sum + (suite.failures ?? 0) + (suite.errors ?? 0), 0);
+    const total = suites.reduce((sum, suite) => sum + (suite.tests ?? 0), 0);
+    const role = module.architecture_role ?? "";
+    const roleBadge = role ? `<span class="ts-role-badge">${esc(role)}</span>` : "";
+
+    const healthCls = healthClass(health?.status);
+    const covPct = formatPercent(coverage?.coverage);
+    const covCls = coverageClass(coverage?.coverage ?? undefined);
+    const mutPct = formatPercent(mutation?.changed_code_score ?? mutation?.score);
+    const mutCls = mutationScoreClass(mutation?.changed_code_score ?? mutation?.score);
+
+    html += `<div class="ts-module">
+      <div class="ts-module-head">
+        <span class="ts-module-name">${esc(module.name)}</span>
+        ${roleBadge}
+        <span class="ts-health-badge ${healthCls}">${health?.status ?? "no data"}</span>
+      </div>
+      <div class="ts-module-meta">
+        ${coverage ? `<span class="ts-metric ${covCls}">Coverage ${covPct}</span>` : ""}
+        ${mutation?.score != null || mutation?.changed_code_score != null ? `<span class="ts-metric ${mutCls}">Mutation ${mutPct}</span>` : ""}
+        ${total > 0 ? `<span class="ts-metric">${total} test${total === 1 ? "" : "s"}</span>` : ""}
+        ${failed > 0 ? `<span class="ts-metric ts-fail">${failed} failed</span>` : ""}
+      </div>
+      ${health?.recommendations?.length ? `<div class="ts-recommendations">${health.recommendations.map(r => `<div class="ts-rec">${esc(r)}</div>`).join("")}</div>` : ""}
+    </div>`;
+  }
+
+  const health = report.test_signals?.health;
+  const healthSummary = health
+    ? `<span class="ts-health-badge ${healthClass(health.status)}">${health.status} · score ${health.score}</span>`
+    : "";
+
+  container.innerHTML = `<div class="ts-header">
+      <h3>Test Signals</h3>
+      ${healthSummary}
+    </div>
+    <div class="ts-module-list">${html || `<div class="empty-state compact">No module-level test data was collected.</div>`}</div>`;
+}
+
+function healthClass(status: string | undefined): string {
+  if (status === "healthy") return "card-green";
+  if (status === "at_risk") return "card-red";
+  if (status === "partial") return "card-yellow";
+  return "card-neutral";
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -486,7 +759,7 @@ function renderCoverageDetails(): void {
   container.innerHTML = `<div class="coverage-toolbar">
       <div>
         <h3>Coverage Files</h3>
-        <p>${coverageFiles.length.toLocaleString()} files with executable lines from collected test reports</p>
+        <p>${coverageFiles.length.toLocaleString()} files with line-level detail. Overall coverage includes all measured files, not only those listed here.</p>
       </div>
       <span class="coverage-pill ${coverageClass(report.measures.coverage ?? null)}">${formatPercent(report.measures.coverage)}</span>
     </div>
@@ -653,12 +926,34 @@ function setupTabs(): void {
       switchTab(tab);
     });
   });
+
+  const tablist = document.querySelector(".tabs")!;
+  tablist.addEventListener("keydown", (e: KeyboardEvent) => {
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>(".tab[role='tab']"));
+    const currentIndex = tabs.findIndex(t => t.getAttribute("aria-selected") === "true");
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      const next = tabs[(currentIndex + 1) % tabs.length];
+      next.focus();
+      switchTab(next.dataset["tab"]!);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      const prev = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
+      prev.focus();
+      switchTab(prev.dataset["tab"]!);
+    }
+  });
 }
 
 function switchTab(tab: string): void {
   activeTab = tab;
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add("active");
+  document.querySelectorAll(".tab").forEach(t => {
+    t.classList.remove("active");
+    t.setAttribute("aria-selected", "false");
+  });
+  const activeBtn = document.querySelector(`.tab[data-tab="${tab}"]`) as HTMLElement | null;
+  activeBtn?.classList.add("active");
+  activeBtn?.setAttribute("aria-selected", "true");
   document.querySelectorAll(".panel").forEach(p => (p as HTMLElement).classList.add("hidden"));
   el(`panel-${tab}`).classList.remove("hidden");
 }
@@ -676,6 +971,19 @@ function populateFilters(): void {
     sel.appendChild(opt);
   });
 
+  const tagSet = new Set<string>();
+  for (const issue of allIssues) {
+    for (const tag of issue.tags ?? []) {
+      tagSet.add(tag);
+    }
+  }
+  const tagSel = el("filter-tag") as HTMLSelectElement;
+  [...tagSet].sort().forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t; opt.textContent = t;
+    tagSel.appendChild(opt);
+  });
+
   el("filter-severity").addEventListener("change", e => {
     filterSeverity = (e.target as HTMLSelectElement).value;
     applyFilters();
@@ -686,6 +994,14 @@ function populateFilters(): void {
   });
   sel.addEventListener("change", e => {
     filterRule = (e.target as HTMLSelectElement).value;
+    applyFilters();
+  });
+  el("filter-quality").addEventListener("change", e => {
+    filterQuality = (e.target as HTMLSelectElement).value;
+    applyFilters();
+  });
+  tagSel.addEventListener("change", e => {
+    filterTag = (e.target as HTMLSelectElement).value;
     applyFilters();
   });
   el("search").addEventListener("input", e => {
@@ -703,12 +1019,12 @@ function renderSevChips(): void {
     const count = sevCounts[sev] ?? 0;
     const color = SEV_COLORS[sev] ?? "#64748b";
     const active = filterSeverity === sev ? " active" : "";
-    return `<div class="sev-chip${active}" data-sev="${sev}"
-      style="--chip-color:${color};--chip-bg:${color}15">
+    return `<button class="sev-chip${active}" data-sev="${sev}"
+      style="--chip-color:${color};--chip-bg:${color}15" aria-pressed="${active ? "true" : "false"}">
       <span class="chip-dot" style="background:${color}"></span>
       ${sev}
       <span class="chip-count">${count}</span>
-    </div>`;
+    </button>`;
   }).join("");
 
   el("sev-chips").querySelectorAll(".sev-chip").forEach(chip => {
@@ -731,6 +1047,8 @@ function applyFilters(): void {
     if (filterSeverity !== "all" && i.severity !== filterSeverity) return false;
     if (filterType !== "all" && i.type !== filterType) return false;
     if (filterRule !== "all" && i.rule_key !== filterRule) return false;
+    if (filterQuality !== "all" && i.quality !== filterQuality) return false;
+    if (filterTag !== "all" && !(i.tags ?? []).includes(filterTag)) return false;
     if (searchText) {
       const hay = `${i.component_path} ${i.message} ${i.rule_key}`.toLowerCase();
       if (!hay.includes(searchText)) return false;
@@ -747,6 +1065,12 @@ function applyFilters(): void {
 
   selectedIndex = -1;
   renderIssueList();
+
+  const count = filteredIssues.length;
+  const announcer = document.getElementById("filter-announcer");
+  if (announcer) {
+    announcer.textContent = `${count} issue${count === 1 ? "" : "s"} match the current filters`;
+  }
 }
 
 function renderIssueList(): void {
@@ -765,7 +1089,8 @@ function renderIssueList(): void {
     const loc = issue.end_line && issue.end_line !== issue.line
       ? `L${issue.line}–${issue.end_line}` : `L${issue.line}`;
     const typeLabel = TYPE_LABELS[issue.type] ?? issue.type;
-    return `<div class="issue-row" data-idx="${idx}">
+    const qualityBadge = issue.quality ? `<span class="quality-badge quality-${esc(issue.quality)}">${esc(QUALITY_LABELS[issue.quality] ?? issue.quality)}</span>` : "";
+    return `<div class="issue-row" role="button" tabindex="0" aria-label="${esc(issue.severity)} issue: ${esc(issue.message)}" data-idx="${idx}">
       <span class="issue-sev">
         <span class="issue-sev-dot" style="background:${color}"></span>
         ${esc(issue.severity)}
@@ -775,15 +1100,24 @@ function renderIssueList(): void {
         <span class="issue-msg">${esc(issue.message)}</span>
         <span class="issue-file" title="${esc(issue.component_path)}">${esc(file)}:${loc}</span>
       </div>
+      ${qualityBadge}
       <span class="issue-rule">${esc(issue.rule_key)}</span>
     </div>`;
   }).join("");
 
-  // Click handlers
+  // Click / keyboard handlers
   container.querySelectorAll(".issue-row").forEach(row => {
     row.addEventListener("click", () => {
       const idx = Number.parseInt((row as HTMLElement).dataset["idx"]!, 10);
       selectIssue(idx);
+    });
+    row.addEventListener("keydown", (e: Event) => {
+      const ke = e as KeyboardEvent;
+      if (ke.key === "Enter" || ke.key === " ") {
+        ke.preventDefault();
+        const idx = Number.parseInt((row as HTMLElement).dataset["idx"]!, 10);
+        selectIssue(idx);
+      }
     });
   });
 }
@@ -819,7 +1153,7 @@ function renderFileTree(): void {
   container.innerHTML = fileGroups.map((fg, gi) =>
     `<div class="file-group${fg.expanded ? " expanded" : ""}" data-gi="${gi}">
       <div class="file-group-header">
-        <span class="file-group-chevron">▶</span>
+        <span class="file-group-chevron icon-chevron" role="img" aria-label="Expand"></span>
         <span class="file-group-name" title="${esc(fg.path)}">${esc(fg.shortPath)}</span>
         <span class="file-group-count">${fg.issues.length}</span>
       </div>
@@ -876,25 +1210,31 @@ function expandFileGroup(path: string): void {
 // Issue Detail Panel (slide-out — SonarQube's issue detail view)
 // ══════════════════════════════════════════════════════════════════════════
 
-function selectIssue(idx: number): void {
+function selectIssue(idx: number, open = true): void {
   selectedIndex = idx;
   selectedIssue = filteredIssues[idx] ?? null;
   // Highlight selected row
   document.querySelectorAll(".issue-row").forEach(r => r.classList.remove("selected"));
-  document.querySelector(`.issue-row[data-idx="${idx}"]`)?.classList.add("selected");
-  if (selectedIssue) openDetail(selectedIssue);
+  const row = document.querySelector(`.issue-row[data-idx="${idx}"]`) as HTMLElement | null;
+  row?.classList.add("selected");
+  row?.focus();
+  if (open && selectedIssue) openDetail(selectedIssue);
 }
 
 function openDetail(issue: Issue): void {
+  lastFocusedElement = document.activeElement as HTMLElement | null;
   selectedIssue = issue;
   detailTab = "details";
   detailRuleHtml = "";
   detailRuleLoading = true;
   aiFixState = createEmptyAIFixState();
-  el("detail-title").textContent = issue.rule_key;
+  el("detail-title").textContent = issue.message || issue.rule_key;
   renderDetailBody(issue);
   el("detail-panel").classList.add("open");
   el("detail-overlay").classList.add("open");
+
+  const firstFocusable = el("detail-panel").querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
+  firstFocusable?.focus();
 
   void fetchRuleDetail(issue.rule_key);
 }
@@ -920,13 +1260,13 @@ async function fetchRuleDetail(ruleKey: string): Promise<void> {
     }
     if (rule.noncompliant_code) {
       rhtml += `<div class="detail-section">
-        <div class="detail-section-title">✘ Noncompliant Code</div>
+        <div class="detail-section-title">${iconHtml("cross", "Noncompliant")} Noncompliant Code</div>
         <pre class="rule-code noncompliant"><code>${esc(rule.noncompliant_code)}</code></pre>
       </div>`;
     }
     if (rule.compliant_code) {
       rhtml += `<div class="detail-section">
-        <div class="detail-section-title">✔ Compliant Code</div>
+        <div class="detail-section-title">${iconHtml("check", "Compliant")} Compliant Code</div>
         <pre class="rule-code compliant"><code>${esc(rule.compliant_code)}</code></pre>
       </div>`;
     }
@@ -941,6 +1281,53 @@ async function fetchRuleDetail(ruleKey: string): Promise<void> {
   }
 }
 
+function bindDetailCopyButton(issue: Issue): void {
+  document.getElementById("detailCopy")?.addEventListener("click", () => {
+    void copyIssueDetail(issue);
+  });
+}
+
+async function copyIssueDetail(issue: Issue): Promise<void> {
+  const lines: string[] = [];
+  lines.push(`Issue: ${issue.message || ""}`);
+  lines.push(`Severity: ${issue.severity}`);
+  lines.push(`Type: ${TYPE_LABELS[issue.type] ?? issue.type}`);
+  lines.push(`Rule: ${issue.rule_key}`);
+  if (issue.engine_id) lines.push(`Engine: ${issue.engine_id}`);
+  lines.push(`File: ${issue.component_path}`);
+  const loc = issue.end_line && issue.end_line !== issue.line
+    ? `lines ${issue.line}\u2013${issue.end_line}`
+    : `line ${issue.line}`;
+  lines.push(`Location: ${loc}${issue.column ? ", column " + issue.column : ""}`);
+  lines.push(`Status: ${issue.status}`);
+  if (issue.tags?.length) lines.push(`Tags: ${issue.tags.join(", ")}`);
+
+  try {
+    const res = await fetch(`/rules/${encodeURIComponent(issue.rule_key)}`);
+    if (res.ok) {
+      const rule = await res.json();
+      if (rule.rationale) lines.push(`\nWhy is this a problem?\n${rule.rationale}`);
+      if (rule.noncompliant_code) lines.push(`\nNoncompliant code:\n${rule.noncompliant_code}`);
+      if (rule.compliant_code) lines.push(`\nCompliant code:\n${rule.compliant_code}`);
+    }
+  } catch { /* rule details unavailable */ }
+
+  try {
+    await navigator.clipboard.writeText(lines.join("\n"));
+    const btn = document.getElementById("detailCopy");
+    if (btn) {
+      btn.innerHTML = `${iconHtml("check", "Copied")} Copied`;
+      setTimeout(() => { btn.innerHTML = `${iconHtml("copy", "Copy")} Copy`; }, 2000);
+    }
+  } catch {
+    const btn = document.getElementById("detailCopy");
+    if (btn) {
+      btn.innerHTML = `${iconHtml("warn", "Failed")} Failed`;
+      setTimeout(() => { btn.innerHTML = `${iconHtml("copy", "Copy")} Copy`; }, 2000);
+    }
+  }
+}
+
 function closeDetail(): void {
   el("detail-panel").classList.remove("open");
   el("detail-overlay").classList.remove("open");
@@ -949,6 +1336,10 @@ function closeDetail(): void {
   detailRuleLoading = false;
   aiFixState = createEmptyAIFixState();
   document.querySelectorAll(".issue-row").forEach(r => r.classList.remove("selected"));
+  if (lastFocusedElement) {
+    lastFocusedElement.focus();
+    lastFocusedElement = null;
+  }
 }
 
 function renderDetailBody(issue: Issue): void {
@@ -960,7 +1351,7 @@ function renderDetailBody(issue: Issue): void {
       ${renderIssueDetailContent(issue)}
     </div>
     <div class="detail-tab-panel${detailTab === "rule" ? "" : " hidden"}" data-detail-panel="rule">
-      ${detailRuleLoading ? `<div class="detail-loading">Loading rule details…</div>` : detailRuleHtml}
+      ${detailRuleLoading ? `<div class="detail-loading">Loading rule details\u2026</div>` : detailRuleHtml}
     </div>
     <div class="detail-tab-panel${detailTab === "ai-fix" ? "" : " hidden"}" data-detail-panel="ai-fix">
       ${renderAIFixContent(issue, aiFixState, cachedAIProviders ?? [])}
@@ -969,6 +1360,7 @@ function renderDetailBody(issue: Issue): void {
 
   el("detail-body").innerHTML = html;
   bindDetailPanelEvents(issue);
+  bindDetailCopyButton(issue);
 }
 
 function renderIssueDetailContent(issue: Issue): string {
@@ -992,6 +1384,10 @@ function renderIssueDetailContent(issue: Issue): string {
         <span class="detail-field-label">Type</span>
         <span class="detail-field-value">${esc(typeLabel)}</span>
       </div>
+      ${issue.quality ? `<div class="detail-field">
+        <span class="detail-field-label">Quality</span>
+        <span class="detail-field-value"><span class="quality-badge quality-${esc(issue.quality)}">${esc(QUALITY_LABELS[issue.quality] ?? issue.quality)}</span></span>
+      </div>` : ""}
       <div class="detail-field">
         <span class="detail-field-label">Rule</span>
         <span class="detail-field-value" style="font-family:var(--font-mono);color:var(--accent)">${esc(issue.rule_key)}</span>
@@ -1258,14 +1654,12 @@ function setupKeyboard(): void {
 
     if (e.key === "j" || e.key === "ArrowDown") {
       e.preventDefault();
-      if (selectedIndex < filteredIssues.length - 1) selectIssue(selectedIndex + 1);
+      if (selectedIndex < filteredIssues.length - 1) selectIssue(selectedIndex + 1, false);
       scrollToSelected();
     } else if (e.key === "k" || e.key === "ArrowUp") {
       e.preventDefault();
-      if (selectedIndex > 0) selectIssue(selectedIndex - 1);
+      if (selectedIndex > 0) selectIssue(selectedIndex - 1, false);
       scrollToSelected();
-    } else if (e.key === "Enter") {
-      if (selectedIssue) openDetail(selectedIssue);
     }
   });
 }

@@ -43,6 +43,16 @@ export interface Measures {
 export interface TestSignalReport {
   summary: TestSignalSummary;
   modules: TestModuleSignal[];
+  health?: TestHealthSummary;
+}
+
+export interface TestHealthSummary {
+  status: string;
+  score: number;
+  modules: number;
+  modules_at_risk?: number;
+  partial_modules?: number;
+  recommendations?: string[];
 }
 
 export interface TestSignalSummary {
@@ -72,6 +82,28 @@ export interface TestModuleSignal {
   mutation?: TestMutationSummary;
   coverage?: TestCoverageSummary;
   files?: TestFileCoverage[];
+  suites?: TestSuiteSignal[];
+  health?: TestModuleHealth;
+}
+
+export interface TestSuiteSignal {
+  name?: string;
+  kind?: string;
+  tests?: number;
+  passed?: number;
+  failures?: number;
+  errors?: number;
+  skipped?: number;
+  duration_ms?: number;
+}
+
+export interface TestModuleHealth {
+  status: string;
+  score: number;
+  confidence?: string;
+  partial?: boolean;
+  reasons?: string[];
+  recommendations?: string[];
 }
 
 export interface TestMutationSummary {
@@ -136,6 +168,7 @@ export interface Issue {
   line_hash: string;
   tags: string[];
   secondary_locations: SecondaryLocation[];
+  quality?: string;
 }
 
 export interface SecondaryLocation {
@@ -162,6 +195,7 @@ export interface GateCondition {
   threshold: number;
   value: number;
   passed: boolean;
+  severity?: "warning" | "missing";
 }
 
 /** Issues grouped by file */
