@@ -1,0 +1,12 @@
+{
+  "key": "ts:moment-deprecated",
+  "name": "moment.js Deprecated",
+  "description": "moment.js is now a legacy project; consider modern alternatives.",
+  "language": "typescript",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "deprecated"],
+  "rationale": "The Moment.js team recommends against using it in new projects. Alternatives like date-fns, Luxon, or native Temporal API offer better tree-shaking, immutability, and bundle size.",
+  "noncompliant_code": "import moment from 'moment';\nconst d = moment();",
+  "compliant_code": "import { format } from 'date-fns';\nconst s = format(new Date(), 'yyyy-MM-dd');"
+}

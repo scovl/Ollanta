@@ -1,0 +1,12 @@
+{
+  "key": "go:loop-pointer",
+  "name": "Loop Variable Pointer Capture",
+  "description": "Capturing a loop variable by reference inside a goroutine closure causes all goroutines to see the final value of the variable.",
+  "language": "go",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["correctness", "concurrency"],
+  "rationale": "Go reuses the same loop variable address across iterations. Passing it as a function argument creates a copy and avoids the bug.",
+  "noncompliant_code": "for _, item := range items {\n  go func() {\n    process(item)\n  }()\n}",
+  "compliant_code": "for _, item := range items {\n  go func(i Item) {\n    process(i)\n  }(item)\n}"
+}

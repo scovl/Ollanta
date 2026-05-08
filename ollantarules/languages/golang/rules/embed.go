@@ -21,5 +21,24 @@ func init() {
 		NoNakedReturns,
 		TodoComment,
 		TooManyParameters,
+		UselessEqEq,
+		UselessIfElse,
+		UseFilepathJoin,
+		BadTmp,
+		MathRandom,
+		MD5UsedAsPassword,
+		// Wave 2 — Go
+		BindAll,
+		MissingSSLMinVersion,
+		WeakCrypto,
+		DecompressionBomb,
+		FilepathCleanMisuse,
+		LoopPointer,
+		// Wave 3 — Go
+		CookieMissingHttponly,
+		CookieMissingSecure,
+		TemplateHTMLDoesNotEscape,
+		UnsafeUsage,
+		ZipTraversal,
 	)
 }

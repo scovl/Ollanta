@@ -1,0 +1,12 @@
+{
+  "key": "py:dangerous-os-exec",
+  "name": "Dangerous os.exec Call",
+  "description": "os.system and os.exec* functions execute arbitrary commands and are dangerous with untrusted input.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "command-injection", "cwe-78"],
+  "rationale": "These functions pass strings directly to the operating system shell. Use subprocess with a list of arguments instead.",
+  "noncompliant_code": "os.system(f'rm {user_path})",
+  "compliant_code": "import subprocess\nsubprocess.run(['rm', user_path])"
+}

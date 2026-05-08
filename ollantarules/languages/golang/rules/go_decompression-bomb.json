@@ -1,0 +1,12 @@
+{
+  "key": "go:decompression-bomb",
+  "name": "Decompression Bomb",
+  "description": "Creating a gzip, zlib or flate reader without size limits can lead to denial of service via decompression bombs.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "dos"],
+  "rationale": "Compressed data can expand to many times its original size. Always limit the amount of data read from a decompressor.",
+  "noncompliant_code": "r, err := gzip.NewReader(src)",
+  "compliant_code": "r, err := gzip.NewReader(src)\nif err != nil {\n  return err\n}\ndefer r.Close()\nlr := io.LimitReader(r, maxDecompressSize)"
+}

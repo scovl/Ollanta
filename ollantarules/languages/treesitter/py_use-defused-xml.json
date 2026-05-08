@@ -1,0 +1,12 @@
+{
+  "key": "py:use-defused-xml",
+  "name": "Use defusedxml",
+  "description": "xml.etree.ElementTree is vulnerable to XML bombs and external entity attacks.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "xml", "cwe-611"],
+  "rationale": "Standard library XML parsers are vulnerable to billion laughs and quadratic blowup attacks. Use defusedxml for untrusted input.",
+  "noncompliant_code": "import xml.etree.ElementTree as ET\nET.parse(user_xml)",
+  "compliant_code": "import defusedxml.ElementTree as ET\nET.parse(user_xml)"
+}

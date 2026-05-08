@@ -1,0 +1,12 @@
+{
+  "key": "js:incomplete-sanitization",
+  "name": "Incomplete Sanitization",
+  "description": "Replacing only one dangerous character (e.g., <) while leaving others (e.g., >) is insufficient and can be bypassed.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "xss", "cwe-116"],
+  "rationale": "Sanitization must be comprehensive. Use a well-tested library for HTML escaping instead of ad-hoc replacements.",
+  "noncompliant_code": "const clean = input.replace(/</g, '');",
+  "compliant_code": "import DOMPurify from 'dompurify';\nconst clean = DOMPurify.sanitize(input);"
+}

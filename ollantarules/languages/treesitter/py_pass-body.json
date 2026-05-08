@@ -1,0 +1,12 @@
+{
+  "key": "py:pass-body",
+  "name": "Empty Pass Body",
+  "description": "Functions or classes with only a pass statement and no docstring are incomplete.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "incomplete"],
+  "rationale": "A pass-only body without documentation suggests unfinished code. Add a docstring explaining the intent or implement the body.",
+  "noncompliant_code": "def process(data):\n    pass",
+  "compliant_code": "def process(data):\n    \"\"\"Process the given data and return normalized result.\"\"\"\n    pass"
+}

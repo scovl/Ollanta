@@ -1,0 +1,12 @@
+{
+  "key": "go:bad-tmp",
+  "name": "Insecure Temporary File",
+  "description": "Creating temporary files with hardcoded /tmp/ paths is insecure. Use os.CreateTemp to ensure atomic creation and safe permissions.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "cwe-377"],
+  "rationale": "Hardcoded paths in /tmp are predictable and susceptible to symlink attacks. An attacker can create a symlink at the expected path to overwrite arbitrary files. os.CreateTemp generates unpredictable names atomically.",
+  "noncompliant_code": "f, err := os.Create(\"/tmp/myapp-data.txt\")\nif err != nil {\n    log.Fatal(err)\n}",
+  "compliant_code": "f, err := os.CreateTemp(\"\", \"myapp-data-*.txt\")\nif err != nil {\n    log.Fatal(err)\n}\ndefer os.Remove(f.Name())"
+}

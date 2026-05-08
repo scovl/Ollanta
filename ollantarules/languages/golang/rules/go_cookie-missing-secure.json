@@ -1,0 +1,12 @@
+{
+  "key": "go:cookie-missing-secure",
+  "name": "Cookie Missing Secure",
+  "description": "http.Cookie without Secure=true may be transmitted over unencrypted connections.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "cwe-614"],
+  "rationale": "The Secure flag ensures the cookie is only sent over HTTPS, preventing interception on insecure networks.",
+  "noncompliant_code": "&http.Cookie{Name: \"session\", Value: token}",
+  "compliant_code": "&http.Cookie{Name: \"session\", Value: token, Secure: true}"
+}

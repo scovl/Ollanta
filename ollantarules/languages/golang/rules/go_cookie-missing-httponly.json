@@ -1,0 +1,12 @@
+{
+  "key": "go:cookie-missing-httponly",
+  "name": "Cookie Missing HttpOnly",
+  "description": "http.Cookie without HttpOnly=true is vulnerable to XSS attacks via JavaScript access.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "xss", "cwe-1004"],
+  "rationale": "The HttpOnly flag prevents client-side scripts from accessing the cookie, mitigating XSS attacks.",
+  "noncompliant_code": "&http.Cookie{Name: \"session\", Value: token}",
+  "compliant_code": "&http.Cookie{Name: \"session\", Value: token, HttpOnly: true}"
+}

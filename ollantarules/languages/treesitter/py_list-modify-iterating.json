@@ -1,0 +1,12 @@
+{
+  "key": "py:list-modify-iterating",
+  "name": "List Modified During Iteration",
+  "description": "Modifying a list (remove, pop, append) while iterating over it produces unexpected results.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["correctness", "runtime-error"],
+  "rationale": "Modifying a list during iteration skips elements or causes index errors. Build a new list or iterate over a copy.",
+  "noncompliant_code": "for item in items:\n    if item.is_expired():\n        items.remove(item)",
+  "compliant_code": "items = [item for item in items if not item.is_expired()]"
+}

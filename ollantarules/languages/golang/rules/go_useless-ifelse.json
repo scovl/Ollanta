@@ -1,0 +1,12 @@
+{
+  "key": "go:useless-ifelse",
+  "name": "Useless If/Else",
+  "description": "If statements with constant true or false conditions are dead code and should be removed or corrected.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["correctness", "dead-code"],
+  "rationale": "Constant boolean conditions in if statements make branches unreachable or always execute. This obscures intent and accumulates technical debt.",
+  "noncompliant_code": "func process(x int) int {\n    if true {\n        return x * 2\n    }\n    return x\n}",
+  "compliant_code": "func process(x int) int {\n    return x * 2\n}"
+}

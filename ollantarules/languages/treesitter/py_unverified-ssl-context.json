@@ -1,0 +1,12 @@
+{
+  "key": "py:unverified-ssl-context",
+  "name": "Unverified SSL Context",
+  "description": "ssl._create_unverified_context disables certificate validation and is vulnerable to MITM attacks.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "ssl", "cwe-295"],
+  "rationale": "Disabling certificate validation removes protection against man-in-the-middle attacks. Use proper certificate verification.",
+  "noncompliant_code": "import ssl\nctx = ssl._create_unverified_context()",
+  "compliant_code": "import ssl\nctx = ssl.create_default_context()"
+}

@@ -1,0 +1,12 @@
+{
+  "key": "py:dangerous-subprocess",
+  "name": "Dangerous Subprocess Call",
+  "description": "Using shell=True in subprocess calls allows shell injection if any argument is untrusted.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "command-injection", "cwe-78"],
+  "rationale": "shell=True passes the command string to the system shell, which interprets metacharacters. Pass a list of arguments instead.",
+  "noncompliant_code": "subprocess.run(f'ls {user_dir}', shell=True)",
+  "compliant_code": "subprocess.run(['ls', user_dir])"
+}

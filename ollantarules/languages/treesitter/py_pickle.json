@@ -1,0 +1,12 @@
+{
+  "key": "py:pickle",
+  "name": "Unsafe pickle.load",
+  "description": "pickle.load can execute arbitrary code during deserialization; never unpickle untrusted data.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "deserialization", "cwe-502"],
+  "rationale": "Pickle is not a secure serialization format. An attacker can craft pickle payloads that execute arbitrary Python code.",
+  "noncompliant_code": "import pickle\ndata = pickle.load(file)",
+  "compliant_code": "Use JSON or msgpack for untrusted data. If pickle is required, verify the data source cryptographically."
+}

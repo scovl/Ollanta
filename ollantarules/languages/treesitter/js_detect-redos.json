@@ -1,0 +1,12 @@
+{
+  "key": "js:detect-redos",
+  "name": "Regex Denial of Service (ReDoS)",
+  "description": "Regex patterns with nested quantifiers can cause catastrophic backtracking.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "dos", "cwe-1333"],
+  "rationale": "Nested quantifiers like (a+)+ cause exponential execution time on crafted input. Avoid them or use a safe regex engine.",
+  "noncompliant_code": "const re = /(a+)+/;",
+  "compliant_code": "const re = /a+/;"
+}

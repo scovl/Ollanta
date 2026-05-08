@@ -1,0 +1,12 @@
+{
+  "key": "js:path-join-resolve-traversal",
+  "name": "Path Traversal via path.join",
+  "description": "path.join and path.resolve with untrusted input can lead to directory traversal.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "path-traversal", "cwe-22"],
+  "rationale": "When user input is passed directly to path operations, '../' sequences can escape the intended directory. Validate and sanitize inputs.",
+  "noncompliant_code": "const p = path.join(baseDir, req.query.file);",
+  "compliant_code": "const safe = path.normalize(req.query.file).replace(/^(\\.\\.(\\/|\\\\|$))+/, '');\nconst p = path.join(baseDir, safe);"
+}

@@ -1,0 +1,12 @@
+{
+  "key": "py:insecure-hash",
+  "name": "Insecure Hash Algorithm",
+  "description": "hashlib.md5 and hashlib.sha1 are cryptographically broken and should not be used.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "crypto", "cwe-327"],
+  "rationale": "MD5 and SHA-1 are vulnerable to collision attacks. Use SHA-256 or better for any security-sensitive hashing.",
+  "noncompliant_code": "import hashlib\nh = hashlib.md5(data).hexdigest()",
+  "compliant_code": "import hashlib\nh = hashlib.sha256(data).hexdigest()"
+}

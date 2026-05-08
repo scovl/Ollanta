@@ -1,0 +1,12 @@
+{
+  "key": "py:avoid-pyyaml-load",
+  "name": "Unsafe yaml.load",
+  "description": "yaml.load without Loader=SafeLoader can execute arbitrary Python code from untrusted YAML.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "deserialization", "cwe-502"],
+  "rationale": "PyYAML's default loader can construct arbitrary Python objects. Always use SafeLoader or safe_load for untrusted input.",
+  "noncompliant_code": "import yaml\ndata = yaml.load(stream)",
+  "compliant_code": "import yaml\ndata = yaml.safe_load(stream)\n# or yaml.load(stream, Loader=yaml.SafeLoader)"
+}

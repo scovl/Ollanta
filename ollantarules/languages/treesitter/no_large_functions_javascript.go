@@ -40,4 +40,3 @@ var NoLargeFunctionsJS = ollantarules.Rule{
 		return issues
 	},
 }
-

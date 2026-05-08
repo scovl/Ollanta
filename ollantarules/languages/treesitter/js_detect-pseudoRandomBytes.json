@@ -1,0 +1,12 @@
+{
+  "key": "js:detect-pseudoRandomBytes",
+  "name": "Insecure Random Bytes",
+  "description": "crypto.pseudoRandomBytes is not cryptographically secure and must not be used for secrets.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "crypto", "cwe-338"],
+  "rationale": "pseudoRandomBytes uses a predictable PRNG. Use crypto.randomBytes for tokens, keys, and session IDs.",
+  "noncompliant_code": "const buf = crypto.pseudoRandomBytes(16);",
+  "compliant_code": "const buf = crypto.randomBytes(16);"
+}

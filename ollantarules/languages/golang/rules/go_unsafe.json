@@ -1,0 +1,12 @@
+{
+  "key": "go:unsafe",
+  "name": "Unsafe Package Usage",
+  "description": "The unsafe package bypasses Go's type safety and memory safety guarantees.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "memory-safety"],
+  "rationale": "unsafe.Pointer and related functions can lead to undefined behavior, memory corruption, and security vulnerabilities.",
+  "noncompliant_code": "ptr := unsafe.Pointer(uintptr(unsafe.Pointer(&x)) + offset)",
+  "compliant_code": "Use safe Go abstractions and avoid unsafe unless absolutely necessary with thorough review."
+}

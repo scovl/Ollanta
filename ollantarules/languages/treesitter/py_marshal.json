@@ -1,0 +1,12 @@
+{
+  "key": "py:marshal",
+  "name": "Unsafe marshal.load",
+  "description": "marshal.load can execute arbitrary code; do not unmarshal untrusted data.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "deserialization", "cwe-502"],
+  "rationale": "marshal is intended for internal Python use and supports arbitrary object reconstruction. It is not safe for untrusted input.",
+  "noncompliant_code": "import marshal\ndata = marshal.load(file)",
+  "compliant_code": "Use JSON or msgpack for untrusted data."
+}

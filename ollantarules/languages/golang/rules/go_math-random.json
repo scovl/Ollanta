@@ -1,0 +1,12 @@
+{
+  "key": "go:math-random",
+  "name": "Weak Random Number Generator",
+  "description": "math/rand is not cryptographically secure and must not be used for tokens, passwords, session IDs, or other security-sensitive values.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "cwe-338"],
+  "rationale": "math/rand produces a deterministic sequence given the same seed. An attacker who guesses or infers the seed can predict all subsequent values. Use crypto/rand for unpredictable randomness.",
+  "noncompliant_code": "import \"math/rand\"\n\ntoken := rand.Intn(1000000)\nsessionID := rand.Uint32()",
+  "compliant_code": "import \"crypto/rand\"\n\nfunc randomToken() (string, error) {\n    b := make([]byte, 16)\n    if _, err := rand.Read(b); err != nil {\n        return \"\", err\n    }\n    return hex.EncodeToString(b), nil\n}"
+}

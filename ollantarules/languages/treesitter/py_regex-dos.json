@@ -1,0 +1,12 @@
+{
+  "key": "py:regex-dos",
+  "name": "Regex Denial of Service (ReDoS)",
+  "description": "Regex patterns with nested quantifiers can cause catastrophic backtracking and denial of service.",
+  "language": "python",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "dos", "cwe-1333"],
+  "rationale": "Nested quantifiers like (a+)+ can cause exponential execution time on crafted input. Use regex libraries with backtracking limits or simplify patterns.",
+  "noncompliant_code": "import re\nre.match(r'(a+)+', user_input)",
+  "compliant_code": "Use a regex library with ReDoS protection or avoid nested quantifiers."
+}

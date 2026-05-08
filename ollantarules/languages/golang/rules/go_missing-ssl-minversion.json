@@ -1,0 +1,12 @@
+{
+  "key": "go:missing-ssl-minversion",
+  "name": "Missing TLS MinVersion",
+  "description": "tls.Config without an explicit MinVersion may negotiate outdated and insecure TLS versions.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "tls"],
+  "rationale": "Go's default TLS minimum version has improved over time, but explicit configuration ensures you never accept weak protocols like TLS 1.0 or 1.1.",
+  "noncompliant_code": "cfg := &tls.Config{}",
+  "compliant_code": "cfg := &tls.Config{\n  MinVersion: tls.VersionTLS12,\n}"
+}

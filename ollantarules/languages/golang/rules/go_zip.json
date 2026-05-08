@@ -1,0 +1,12 @@
+{
+  "key": "go:zip",
+  "name": "Zip Path Traversal",
+  "description": "Extracting files from zip archives without validating entry names can lead to path traversal (ZipSlip).",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "path-traversal", "cwe-22"],
+  "rationale": "Zip entries can contain relative paths (../) that write outside the intended directory. Always validate and sanitize filenames.",
+  "noncompliant_code": "r, _ := zip.OpenReader(\"archive.zip\")\nfor _, f := range r.File {\n  rc, _ := f.Open()\n  path := filepath.Join(\"dest\", f.Name)\n  os.Create(path)\n}",
+  "compliant_code": "r, _ := zip.OpenReader(\"archive.zip\")\nfor _, f := range r.File {\n  if strings.Contains(f.Name, \"..\") {\n    continue\n  }\n  path := filepath.Join(\"dest\", filepath.Clean(f.Name))\n}"
+}

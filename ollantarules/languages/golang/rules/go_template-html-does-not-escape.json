@@ -1,0 +1,12 @@
+{
+  "key": "go:template-html-does-not-escape",
+  "name": "template.HTML Does Not Escape",
+  "description": "template.HTML disables automatic HTML escaping and can lead to XSS if the input is untrusted.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "xss", "cwe-79"],
+  "rationale": "Using template.HTML with dynamic content bypasses Go's html/template auto-escaping. Ensure input is sanitized.",
+  "noncompliant_code": "tmpl := template.HTML(userInput)",
+  "compliant_code": "tmpl := template.HTMLEscapeString(userInput)"
+}

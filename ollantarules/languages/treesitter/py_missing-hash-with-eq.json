@@ -1,0 +1,12 @@
+{
+  "key": "py:missing-hash-with-eq",
+  "name": "Missing __hash__ with __eq__",
+  "description": "A class that defines __eq__ but not __hash__ becomes unhashable in Python 3.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["correctness", "pythonic"],
+  "rationale": "Python sets __hash__ to None when __eq__ is defined without __hash__, breaking use in dicts and sets.",
+  "noncompliant_code": "class Point:\n    def __eq__(self, other):\n        return self.x == other.x",
+  "compliant_code": "class Point:\n    def __eq__(self, other):\n        return self.x == other.x\n    def __hash__(self):\n        return hash(self.x)"
+}

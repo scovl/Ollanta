@@ -1,0 +1,12 @@
+{
+  "key": "go:use-filepath-join",
+  "name": "Use filepath.Join for Path Construction",
+  "description": "Building file paths by concatenating strings with + or fmt.Sprintf is fragile and platform-dependent. Use filepath.Join instead.",
+  "language": "go",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["correctness", "portability"],
+  "rationale": "String concatenation does not handle path separators correctly across platforms and may introduce path traversal vulnerabilities. filepath.Join ensures cross-platform correctness.",
+  "noncompliant_code": "path := dir + \"/\" + filename\nfull := fmt.Sprintf(\"%s/%s\", base, name)",
+  "compliant_code": "path := filepath.Join(dir, filename)\nfull := filepath.Join(base, name)"
+}

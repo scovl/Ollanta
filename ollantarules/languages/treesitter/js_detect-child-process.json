@@ -1,0 +1,12 @@
+{
+  "key": "js:detect-child-process",
+  "name": "Dangerous child_process Usage",
+  "description": "exec, execSync, spawn and spawnSync from child_process can execute arbitrary shell commands.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "command-injection", "cwe-78"],
+  "rationale": "These functions pass arguments to a shell when shell options are used. Always validate and sanitize inputs.",
+  "noncompliant_code": "const cp = require('child_process');\ncp.exec(userInput);",
+  "compliant_code": "const { execFile } = require('child_process');\nexecFile('ls', [userDir]);"
+}

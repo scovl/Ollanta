@@ -1,0 +1,12 @@
+{
+  "key": "js:assigned-undefined",
+  "name": "Assigned Undefined",
+  "description": "Explicitly assigning undefined to a variable is redundant in JavaScript.",
+  "language": "javascript",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["convention", "readability"],
+  "rationale": "Variables in JavaScript are already undefined by default. Explicit assignment adds noise and may confuse readers about intent.",
+  "noncompliant_code": "let x = undefined;",
+  "compliant_code": "let x;"
+}

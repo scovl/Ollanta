@@ -1,0 +1,12 @@
+{
+  "key": "js:detect-insecure-websocket",
+  "name": "Insecure WebSocket",
+  "description": "WebSocket connections over ws:// are unencrypted and can be intercepted.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "network", "cwe-319"],
+  "rationale": "Always use wss:// for WebSocket connections in production to ensure confidentiality and integrity.",
+  "noncompliant_code": "const ws = new WebSocket('ws://example.com/socket');",
+  "compliant_code": "const ws = new WebSocket('wss://example.com/socket');"
+}

@@ -1,0 +1,12 @@
+{
+  "key": "py:sync-sleep-in-async",
+  "name": "Synchronous Sleep in Async Function",
+  "description": "time.sleep blocks the entire event loop in async code; use asyncio.sleep instead.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["correctness", "async", "performance"],
+  "rationale": "time.sleep is a blocking call. In async functions it freezes the event loop and all concurrent tasks.",
+  "noncompliant_code": "async def fetch():\n    time.sleep(1)\n    return await get()",
+  "compliant_code": "async def fetch():\n    await asyncio.sleep(1)\n    return await get()"
+}

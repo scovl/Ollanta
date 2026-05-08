@@ -1,0 +1,12 @@
+{
+  "key": "py:dict-modify-iterating",
+  "name": "Dictionary Modified During Iteration",
+  "description": "Deleting items from a dictionary while iterating over it raises RuntimeError.",
+  "language": "python",
+  "type": "bug",
+  "severity": "major",
+  "tags": ["correctness", "runtime-error"],
+  "rationale": "Python dictionaries cannot change size during iteration. Use dict comprehension or collect keys to delete first.",
+  "noncompliant_code": "for k in d.keys():\n    if k.startswith('_'):\n        del d[k]",
+  "compliant_code": "for k in list(d.keys()):\n    if k.startswith('_'):\n        del d[k]"
+}

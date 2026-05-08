@@ -1,0 +1,12 @@
+{
+  "key": "go:filepath-clean-misuse",
+  "name": "Filepath Clean Misuse",
+  "description": "Using filepath.Clean as the only path sanitization before opening a file does not prevent path traversal attacks.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "path-traversal"],
+  "rationale": "filepath.Clean resolves . and .. but still allows absolute paths and paths outside the intended directory. Combine with validation or chroot.",
+  "noncompliant_code": "f, err := os.Open(filepath.Clean(userPath))",
+  "compliant_code": "clean := filepath.Clean(userPath)\nif !strings.HasPrefix(clean, safeBase) {\n  return errors.New(\"path traversal detected\")\n}\nf, err := os.Open(clean)"
+}

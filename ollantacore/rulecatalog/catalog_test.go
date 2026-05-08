@@ -3,11 +3,11 @@ package rulecatalog
 import "testing"
 
 func TestCatalogCounts(t *testing.T) {
-	if got := len(Rules()); got != 17 {
-		t.Fatalf("Rules() count = %d, want 17", got)
+	if got := len(Rules()); got != 69 {
+		t.Fatalf("Rules() count = %d, want 69", got)
 	}
 
-	wantCounts := map[string]int{"go": 8, "javascript": 4, "python": 5, "typescript": 0, "rust": 0}
+	wantCounts := map[string]int{"go": 25, "javascript": 16, "python": 26, "typescript": 2, "rust": 0}
 	for _, language := range SupportedLanguages() {
 		if got := len(ByLanguage(language.Key)); got != wantCounts[language.Key] {
 			t.Fatalf("ByLanguage(%q) count = %d, want %d", language.Key, got, wantCounts[language.Key])

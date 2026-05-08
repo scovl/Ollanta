@@ -1,0 +1,12 @@
+{
+  "key": "py:open-never-closed",
+  "name": "Open Never Closed",
+  "description": "open() is called but the file handle is discarded and never closed.",
+  "language": "python",
+  "type": "code_smell",
+  "severity": "minor",
+  "tags": ["correctness", "resource-leak"],
+  "rationale": "Unclosed file handles leak resources. Use a with statement or ensure close() is called.",
+  "noncompliant_code": "open('data.txt')",
+  "compliant_code": "with open('data.txt') as f:\n    data = f.read()"
+}

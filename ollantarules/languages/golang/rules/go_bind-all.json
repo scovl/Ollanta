@@ -1,0 +1,12 @@
+{
+  "key": "go:bind-all",
+  "name": "Bind All Interfaces",
+  "description": "Binding a network listener to 0.0.0.0 or :: exposes the service on every network interface, increasing the attack surface.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "network"],
+  "rationale": "Services bound to all interfaces are reachable from any network segment, including untrusted ones. Bind to a specific interface or localhost when possible.",
+  "noncompliant_code": "ln, err := net.Listen(\"tcp\", \"0.0.0.0:8080\")",
+  "compliant_code": "ln, err := net.Listen(\"tcp\", \"127.0.0.1:8080\")"
+}

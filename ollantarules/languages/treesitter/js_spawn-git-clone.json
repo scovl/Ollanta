@@ -1,0 +1,12 @@
+{
+  "key": "js:spawn-git-clone",
+  "name": "Unsafe git clone Spawn",
+  "description": "Spawning git clone with untrusted arguments can lead to command injection.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "command-injection", "cwe-78"],
+  "rationale": "Passing user-controlled values to git clone arguments (e.g., --upload-pack) can execute arbitrary commands.",
+  "noncompliant_code": "spawn('git', ['clone', userUrl])",
+  "compliant_code": "Validate the URL against an allowlist before passing to spawn."
+}

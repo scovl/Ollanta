@@ -1,0 +1,12 @@
+{
+  "key": "js:detect-eval",
+  "name": "Dangerous eval() Use",
+  "description": "eval() executes arbitrary code and must not be used with untrusted input.",
+  "language": "javascript",
+  "type": "vulnerability",
+  "severity": "critical",
+  "tags": ["security", "cwe-95"],
+  "rationale": "eval() parses and executes any JavaScript string. If the string contains user input, an attacker can execute arbitrary code (remote code execution). Use JSON.parse for JSON data or structured alternatives.",
+  "noncompliant_code": "const result = eval(userInput);",
+  "compliant_code": "const result = JSON.parse(userInput);"
+}

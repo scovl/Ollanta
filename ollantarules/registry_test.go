@@ -10,8 +10,8 @@ import (
 func TestRegistry_All(t *testing.T) {
 	r := defaults.NewRegistry()
 	all := r.All()
-	if len(all) != 17 {
-		t.Errorf("expected 17 rules, got %d", len(all))
+	if len(all) != 69 {
+		t.Errorf("expected 69 rules, got %d", len(all))
 	}
 }
 
@@ -36,24 +36,24 @@ func TestRegistry_FindByKey_NotFound(t *testing.T) {
 func TestRegistry_FindByLanguage_Go(t *testing.T) {
 	r := defaults.NewRegistry()
 	goRules := r.FindByLanguage("go")
-	if len(goRules) != 8 {
-		t.Errorf("expected 8 Go rules, got %d", len(goRules))
+	if len(goRules) != 25 {
+		t.Errorf("expected 25 Go rules, got %d", len(goRules))
 	}
 }
 
 func TestRegistry_FindByLanguage_JS(t *testing.T) {
 	r := defaults.NewRegistry()
 	jsRules := r.FindByLanguage("javascript")
-	if len(jsRules) != 4 {
-		t.Errorf("expected 4 JS rules, got %d", len(jsRules))
+	if len(jsRules) != 16 {
+		t.Errorf("expected 16 JS rules, got %d", len(jsRules))
 	}
 }
 
 func TestRegistry_Rules_Metadata(t *testing.T) {
 	r := defaults.NewRegistry()
 	rules := r.Rules()
-	if len(rules) != 17 {
-		t.Errorf("expected 17 domain rules, got %d", len(rules))
+	if len(rules) != 69 {
+		t.Errorf("expected 69 domain rules, got %d", len(rules))
 	}
 	for _, rule := range rules {
 		if rule.Key == "" {

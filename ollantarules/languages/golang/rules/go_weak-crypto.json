@@ -1,0 +1,12 @@
+{
+  "key": "go:weak-crypto",
+  "name": "Weak Cryptographic Algorithm",
+  "description": "DES, RC4 and 3DES are cryptographically broken and must not be used.",
+  "language": "go",
+  "type": "vulnerability",
+  "severity": "major",
+  "tags": ["security", "crypto", "cwe-327"],
+  "rationale": "Weak algorithms can be brute-forced or have known vulnerabilities. Use AES-GCM or ChaCha20-Poly1305 instead.",
+  "noncompliant_code": "import \"crypto/des\"\nblock, err := des.NewCipher(key)",
+  "compliant_code": "import \"crypto/aes\"\nblock, err := aes.NewCipher(key)"
+}

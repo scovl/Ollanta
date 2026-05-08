@@ -231,3 +231,490 @@ func noNamed() int {
 		t.Errorf("no named returns — should not flag, got %d issues", len(issues))
 	}
 }
+
+// ── UselessEqEq ─────────────────────────────────────────────────────────────
+
+func TestUselessEqEq_DetectsSelfComparison(t *testing.T) {
+	src := `package p
+func check(a, b int) bool {
+	return a == a
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UselessEqEq.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for self-comparison")
+	}
+}
+
+func TestUselessEqEq_NoIssueOnDifferentOperands(t *testing.T) {
+	src := `package p
+func check(a, b int) bool {
+	return a == b
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UselessEqEq.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── UselessIfElse ───────────────────────────────────────────────────────────
+
+func TestUselessIfElse_DetectsConstantTrue(t *testing.T) {
+	src := `package p
+func f() int {
+	if true {
+		return 1
+	}
+	return 0
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UselessIfElse.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for constant true condition")
+	}
+}
+
+func TestUselessIfElse_NoIssueOnVariable(t *testing.T) {
+	src := `package p
+func f(x bool) int {
+	if x {
+		return 1
+	}
+	return 0
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UselessIfElse.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── UseFilepathJoin ─────────────────────────────────────────────────────────
+
+func TestUseFilepathJoin_DetectsStringConcat(t *testing.T) {
+	src := `package p
+func build(dir, file string) string {
+	return dir + "/" + file
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UseFilepathJoin.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for path string concatenation")
+	}
+}
+
+func TestUseFilepathJoin_NoIssueOnNormalConcat(t *testing.T) {
+	src := `package p
+func greet(a, b string) string {
+	return a + " " + b
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UseFilepathJoin.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── BadTmp ──────────────────────────────────────────────────────────────────
+
+func TestBadTmp_DetectsHardcodedTmp(t *testing.T) {
+	src := `package p
+import "os"
+func f() {
+	os.Create("/tmp/data.txt")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.BadTmp.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for hardcoded /tmp/ path")
+	}
+}
+
+func TestBadTmp_NoIssueOnCreateTemp(t *testing.T) {
+	src := `package p
+import "os"
+func f() {
+	os.CreateTemp("", "data-*.txt")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.BadTmp.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── MathRandom ──────────────────────────────────────────────────────────────
+
+func TestMathRandom_DetectsMathRand(t *testing.T) {
+	src := `package p
+import "math/rand"
+func token() int {
+	return rand.Intn(1000)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MathRandom.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for math/rand usage")
+	}
+}
+
+func TestMathRandom_NoIssueWithoutImport(t *testing.T) {
+	src := `package p
+func token() int {
+	return 42
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MathRandom.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── MD5UsedAsPassword ───────────────────────────────────────────────────────
+
+func TestMD5UsedAsPassword_DetectsMD5(t *testing.T) {
+	src := `package p
+import "crypto/md5"
+func hash(pwd string) [16]byte {
+	return md5.Sum([]byte(pwd))
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MD5UsedAsPassword.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for md5 usage")
+	}
+}
+
+func TestMD5UsedAsPassword_NoIssueWithoutImport(t *testing.T) {
+	src := `package p
+func hash(pwd string) string {
+	return pwd
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MD5UsedAsPassword.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── BindAll ─────────────────────────────────────────────────────────────────
+
+func TestBindAll_DetectsAllInterfaces(t *testing.T) {
+	src := `package p
+import "net"
+func listen() {
+	net.Listen("tcp", "0.0.0.0:8080")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.BindAll.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for 0.0.0.0")
+	}
+}
+
+func TestBindAll_DetectsIPv6All(t *testing.T) {
+	src := `package p
+import "net"
+func listen() {
+	net.Listen("tcp", "[::]:8080")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.BindAll.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for [::]")
+	}
+}
+
+func TestBindAll_NoIssueOnLocalhost(t *testing.T) {
+	src := `package p
+import "net"
+func listen() {
+	net.Listen("tcp", "127.0.0.1:8080")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.BindAll.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── MissingSSLMinVersion ────────────────────────────────────────────────────
+
+func TestMissingSSLMinVersion_DetectsMissing(t *testing.T) {
+	src := `package p
+import "crypto/tls"
+func cfg() *tls.Config {
+	return &tls.Config{}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MissingSSLMinVersion.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for missing MinVersion")
+	}
+}
+
+func TestMissingSSLMinVersion_NoIssueWhenPresent(t *testing.T) {
+	src := `package p
+import "crypto/tls"
+func cfg() *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.MissingSSLMinVersion.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── WeakCrypto ──────────────────────────────────────────────────────────────
+
+func TestWeakCrypto_DetectsDESImport(t *testing.T) {
+	src := `package p
+import "crypto/des"
+func f() {
+	des.NewCipher(nil)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.WeakCrypto.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for weak crypto")
+	}
+}
+
+func TestWeakCrypto_NoIssueOnAES(t *testing.T) {
+	src := `package p
+import "crypto/aes"
+func f() {
+	aes.NewCipher(nil)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.WeakCrypto.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── DecompressionBomb ───────────────────────────────────────────────────────
+
+func TestDecompressionBomb_DetectsGzipNewReader(t *testing.T) {
+	src := `package p
+import "compress/gzip"
+func f(r io.Reader) {
+	gzip.NewReader(r)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.DecompressionBomb.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for gzip.NewReader")
+	}
+}
+
+func TestDecompressionBomb_NoIssueOnSafeCode(t *testing.T) {
+	src := `package p
+func f() int { return 1 }`
+	ctx := parseGoSource(t, src)
+	issues := rules.DecompressionBomb.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── FilepathCleanMisuse ─────────────────────────────────────────────────────
+
+func TestFilepathCleanMisuse_DetectsCleanInOpen(t *testing.T) {
+	src := `package p
+import (
+	"os"
+	"path/filepath"
+)
+func f(p string) {
+	os.Open(filepath.Clean(p))
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.FilepathCleanMisuse.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for filepath.Clean in os.Open")
+	}
+}
+
+func TestFilepathCleanMisuse_NoIssueWithoutClean(t *testing.T) {
+	src := `package p
+import "os"
+func f(p string) {
+	os.Open(p)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.FilepathCleanMisuse.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── LoopPointer ─────────────────────────────────────────────────────────────
+
+func TestLoopPointer_DetectsRangeCapture(t *testing.T) {
+	src := `package p
+func f(items []int) {
+	for _, item := range items {
+		go func() {
+			_ = item
+		}()
+	}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.LoopPointer.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for captured range variable")
+	}
+}
+
+func TestLoopPointer_NoIssueWhenPassedAsArg(t *testing.T) {
+	src := `package p
+func f(items []int) {
+	for _, item := range items {
+		go func(i int) {
+			_ = i
+		}(item)
+	}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.LoopPointer.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues when variable is passed as argument, got %d", len(issues))
+	}
+}
+
+// ── CookieMissingHttponly ───────────────────────────────────────────────────
+
+func TestCookieMissingHttponly_DetectsMissing(t *testing.T) {
+	src := `package p
+import "net/http"
+func cookie() *http.Cookie {
+	return &http.Cookie{Name: "session", Value: "abc"}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.CookieMissingHttponly.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for missing HttpOnly")
+	}
+}
+
+func TestCookieMissingHttponly_NoIssueWhenPresent(t *testing.T) {
+	src := `package p
+import "net/http"
+func cookie() *http.Cookie {
+	return &http.Cookie{Name: "session", Value: "abc", HttpOnly: true}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.CookieMissingHttponly.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── CookieMissingSecure ─────────────────────────────────────────────────────
+
+func TestCookieMissingSecure_DetectsMissing(t *testing.T) {
+	src := `package p
+import "net/http"
+func cookie() *http.Cookie {
+	return &http.Cookie{Name: "session", Value: "abc"}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.CookieMissingSecure.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for missing Secure")
+	}
+}
+
+func TestCookieMissingSecure_NoIssueWhenPresent(t *testing.T) {
+	src := `package p
+import "net/http"
+func cookie() *http.Cookie {
+	return &http.Cookie{Name: "session", Value: "abc", Secure: true}
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.CookieMissingSecure.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── TemplateHTMLDoesNotEscape ───────────────────────────────────────────────
+
+func TestTemplateHTMLDoesNotEscape_DetectsDynamicInput(t *testing.T) {
+	src := `package p
+import "html/template"
+func render(user string) template.HTML {
+	return template.HTML(user)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.TemplateHTMLDoesNotEscape.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for template.HTML with dynamic input")
+	}
+}
+
+func TestTemplateHTMLDoesNotEscape_NoIssueOnLiteral(t *testing.T) {
+	src := `package p
+import "html/template"
+func render() template.HTML {
+	return template.HTML("<b>safe</b>")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.TemplateHTMLDoesNotEscape.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues for string literal, got %d", len(issues))
+	}
+}
+
+// ── UnsafeUsage ─────────────────────────────────────────────────────────────
+
+func TestUnsafeUsage_DetectsUnsafePointer(t *testing.T) {
+	src := `package p
+import "unsafe"
+func f(x int) unsafe.Pointer {
+	return unsafe.Pointer(&x)
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.UnsafeUsage.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for unsafe.Pointer")
+	}
+}
+
+func TestUnsafeUsage_NoIssueWithoutUnsafe(t *testing.T) {
+	src := `package p
+func f() int { return 1 }`
+	ctx := parseGoSource(t, src)
+	issues := rules.UnsafeUsage.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}
+
+// ── ZipTraversal ────────────────────────────────────────────────────────────
+
+func TestZipTraversal_DetectsOpenReader(t *testing.T) {
+	src := `package p
+import "archive/zip"
+func f() {
+	zip.OpenReader("archive.zip")
+}`
+	ctx := parseGoSource(t, src)
+	issues := rules.ZipTraversal.Check(ctx)
+	if len(issues) == 0 {
+		t.Error("expected issue for zip.OpenReader")
+	}
+}
+
+func TestZipTraversal_NoIssueWithoutZip(t *testing.T) {
+	src := `package p
+func f() int { return 1 }`
+	ctx := parseGoSource(t, src)
+	issues := rules.ZipTraversal.Check(ctx)
+	if len(issues) != 0 {
+		t.Errorf("expected no issues, got %d", len(issues))
+	}
+}

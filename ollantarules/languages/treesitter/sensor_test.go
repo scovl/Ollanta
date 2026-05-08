@@ -91,3 +91,528 @@ func TestTreeSitterSensor_CustomMaxLines(t *testing.T) {
 		}
 	}
 }
+
+// ── Wave 1 rule tests — Python ──────────────────────────────────────────────
+
+func TestTreeSitterSensor_PY_UselessEqEq(t *testing.T) {
+	src := []byte("if x == x:\n    pass\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:useless-eqeq" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:useless-eqeq issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_DictModifyIterating(t *testing.T) {
+	src := []byte("for k in d.keys():\n    del d[k]\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:dict-modify-iterating" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:dict-modify-iterating issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_ReturnInInit(t *testing.T) {
+	src := []byte("class User:\n    def __init__(self):\n        return\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:return-in-init" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:return-in-init issue")
+	}
+}
+
+// ── Wave 1 rule tests — JavaScript ──────────────────────────────────────────
+
+func TestTreeSitterSensor_JS_UselessEqEq(t *testing.T) {
+	src := []byte("if (a == a) { return true; }\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:useless-eqeq" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:useless-eqeq issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_DetectEval(t *testing.T) {
+	src := []byte("const r = eval(input);\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:detect-eval" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:detect-eval issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_LeftoverDebugging(t *testing.T) {
+	src := []byte("function f() { debugger; }\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:leftover-debugging" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:leftover-debugging issue")
+	}
+}
+
+// ── Wave 2 rule tests — Python ──────────────────────────────────────────────
+
+func TestTreeSitterSensor_PY_InsecureHash(t *testing.T) {
+	src := []byte("import hashlib\nh = hashlib.md5(b'data').hexdigest()\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:insecure-hash" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:insecure-hash issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_DangerousSubprocess(t *testing.T) {
+	src := []byte("import subprocess\nsubprocess.run('ls', shell=True)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:dangerous-subprocess" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:dangerous-subprocess issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_DangerousOsExec(t *testing.T) {
+	src := []byte("import os\nos.system('rm -rf /')\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:dangerous-os-exec" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:dangerous-os-exec issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_SyncSleepInAsync(t *testing.T) {
+	src := []byte("import time\nasync def fetch():\n    time.sleep(1)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:sync-sleep-in-async" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:sync-sleep-in-async issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_OpenNeverClosed(t *testing.T) {
+	src := []byte("open('data.txt')\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:open-never-closed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:open-never-closed issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_MissingHashWithEq(t *testing.T) {
+	src := []byte("class Point:\n    def __eq__(self, other):\n        return self.x == other.x\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:missing-hash-with-eq" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:missing-hash-with-eq issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_UncheckedReturns(t *testing.T) {
+	src := []byte("import os\nos.remove('file.txt')\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:unchecked-returns" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:unchecked-returns issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_UseDefusedXml(t *testing.T) {
+	src := []byte("import xml.etree.ElementTree as ET\nET.parse('data.xml')\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:use-defused-xml" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:use-defused-xml issue")
+	}
+}
+
+// ── Wave 2 rule tests — JavaScript / TypeScript ─────────────────────────────
+
+func TestTreeSitterSensor_JS_DetectChildProcess(t *testing.T) {
+	src := []byte("const cp = require('child_process');\ncp.exec('ls');\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:detect-child-process" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:detect-child-process issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_DetectInsecureWebsocket(t *testing.T) {
+	src := []byte("const ws = new WebSocket('ws://example.com/socket');\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:detect-insecure-websocket" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:detect-insecure-websocket issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_DetectPseudoRandomBytes(t *testing.T) {
+	src := []byte("const buf = crypto.pseudoRandomBytes(16);\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:detect-pseudoRandomBytes" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:detect-pseudoRandomBytes issue")
+	}
+}
+
+func TestTreeSitterSensor_TS_UselessTernary(t *testing.T) {
+	src := []byte("const ok = result ? true : false;\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.ts", src, "typescript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "ts:useless-ternary" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected ts:useless-ternary issue")
+	}
+}
+
+// ── Wave 3 rule tests — Python ──────────────────────────────────────────────
+
+func TestTreeSitterSensor_PY_AvoidPyyamlLoad(t *testing.T) {
+	src := []byte("import yaml\ndata = yaml.load(stream)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:avoid-pyyaml-load" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:avoid-pyyaml-load issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_Pickle(t *testing.T) {
+	src := []byte("import pickle\ndata = pickle.load(file)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:pickle" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:pickle issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_Marshal(t *testing.T) {
+	src := []byte("import marshal\ndata = marshal.load(file)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:marshal" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:marshal issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_UnverifiedSSLContext(t *testing.T) {
+	src := []byte("import ssl\nctx = ssl._create_unverified_context()\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:unverified-ssl-context" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:unverified-ssl-context issue")
+	}
+}
+
+func TestTreeSitterSensor_PY_RegexDos(t *testing.T) {
+	src := []byte("import re\nre.match(r'(a+)+', user_input)\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.py", src, "python", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "py:regex-dos" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected py:regex-dos issue")
+	}
+}
+
+// ── Wave 3 rule tests — JavaScript ──────────────────────────────────────────
+
+func TestTreeSitterSensor_JS_DetectRedos(t *testing.T) {
+	src := []byte("const re = /(a+)+/;\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:detect-redos" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:detect-redos issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_PathJoinResolveTraversal(t *testing.T) {
+	src := []byte("const p = path.join(baseDir, req.query.file);\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:path-join-resolve-traversal" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:path-join-resolve-traversal issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_SpawnGitClone(t *testing.T) {
+	src := []byte("spawn('git', ['clone', userUrl]);\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:spawn-git-clone" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:spawn-git-clone issue")
+	}
+}
+
+func TestTreeSitterSensor_JS_IncompleteSanitization(t *testing.T) {
+	src := []byte("const clean = input.replace(/</g, '');\n")
+	s := defaultSensor()
+	issues, err := s.Analyze("test.js", src, "javascript", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, iss := range issues {
+		if iss.RuleKey == "js:incomplete-sanitization" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected js:incomplete-sanitization issue")
+	}
+}
