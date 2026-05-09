@@ -1,0 +1,67 @@
+﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Ollanta Web UI â€” Sentry-inspired design
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Sentry-inspired palette */
+  --bg: #1f1633;
+  --bg-card: #150f23;
+  --surface2: #1f1633;
+  --surface3: #2a1f3d;
+  --border: #362d59;
+  --border-light: #4a3f6b;
+  --text: #ffffff;
+  --text-muted: #bdb8c0;
+  --text-dim: #79628c;
+  --accent: #c2ef4e;
+  --accent-hover: #aed93f;
+  --accent-dim: rgba(194,239,78,.12);
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --info: #3b82f6;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --font-mono: "Monaco","Menlo","Ubuntu Mono",monospace;
+  --bg-elevated: #2a1f3d;
+  --bg-secondary: #150f23;
+  --text-secondary: #bdb8c0;
+
+  /* Severity palette (kept semantic) */
+  --sev-blocker: #ef4444;
+  --sev-critical: #f97316;
+  --sev-major: #eab308;
+  --sev-minor: #22c55e;
+  --sev-info: #64748b;
+
+  /* Gate */
+  --gate-passed: #22c55e;
+  --gate-passed-bg: rgba(34,197,94,.08);
+  --gate-failed: #ef4444;
+  --gate-failed-bg: rgba(239,68,68,.08);
+  --gate-warn: #f59e0b;
+  --gate-warn-bg: rgba(245,158,11,.08);
+
+  /* Type */
+  --type-bug: #ef4444;
+  --type-vulnerability: #f97316;
+  --type-code-smell: #22c55e;
+  --brand-mint: #c2ef4e;
+  --brand-cyan: #fa7faa;
+  --brand-shadow: rgba(194, 239, 78, .22);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Rubik", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.hidden { display: none !important; }
+.mono { font-family: var(--font-mono); }
+
