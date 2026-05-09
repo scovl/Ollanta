@@ -185,15 +185,29 @@ function renderOverviewNewCode(newCode) {
     return '';
   }
 
-  const newIssueColor = newCode.new_issues > 0 ? 'var(--warning)' : 'var(--success)';
-  return `
-    <div class="new-code-section">
-      <span class="new-code-badge">New Code</span>
-      <div class="new-code-metrics">
-        <span><span class="ncm-val" style="color:${newIssueColor}">${fmtNum(newCode.new_issues || 0)}</span> new issues</span>
-        <span><span class="ncm-val" style="color:var(--success)">${fmtNum(newCode.closed_issues || 0)}</span> closed</span>
-      </div>
-    </div>`;
+  const ni = newCode.new_issues || 0;
+  const ci = newCode.closed_issues || 0;
+  const hasIssues = ni > 0;
+  const issueCls = hasIssues ? 'danger' : 'success';
+  const badgeCls = hasIssues ? 'critical' : 'clean';
+  const badgeText = hasIssues ? 'Critical Focus' : 'Clean Code';
+
+  return `<section class="overview-panel new-code-dashboard">
+    <p class="section-title">New Code Focus</p>
+    <div class="ncd-grid">
+      <button class="ncd-card clickable" data-overview-action="new-issues">
+        <div class="ncd-card-title">New Issues</div>
+        <div class="ncd-value ${issueCls}">${fmtNum(ni)}</div>
+        <div class="ncd-badge ${badgeCls}">${badgeText}</div>
+      </button>
+      <button class="ncd-card clickable" data-overview-action="closed-issues">
+        <div class="ncd-card-title">Closed Issues</div>
+        <div class="ncd-value success">${fmtNum(ci)}</div>
+        <div class="ncd-trend"></div>
+        <div class="ncd-trend-label">7 days trend</div>
+      </button>
+    </div>
+  </section>`;
 }
 
 function renderOverviewScanInfo(scan) {
@@ -411,19 +425,66 @@ function renderSummaryNewCode(newCode) {
     return '';
   }
 
-  return `<section class="overview-panel summary-section">
+  const ni = metrics.new_issues || 0;
+  const ci = metrics.closed_issues || 0;
+  const nb = metrics.new_bugs || 0;
+  const nv = metrics.new_vulnerabilities || 0;
+  const ns = metrics.new_code_smells || 0;
+  const nc = metrics.new_coverage;
+  const mut = metrics.changed_mutation_score;
+  const nd = metrics.new_duplications;
+  const hasIssues = ni > 0;
+  const badgeCls = hasIssues ? 'critical' : 'clean';
+  const badgeText = hasIssues ? 'Critical Focus' : 'Clean Code';
+  const issueCls = hasIssues ? 'danger' : 'success';
+
+  function miniVal(value, cls, hint) {
+    const display = value != null ? value : '\u2014';
+    return `<div class="ncd-mini-value ${cls}">${escHtml(display)}</div>${hint ? `<div class="ncd-mini-hint">${escHtml(hint)}</div>` : ''}`;
+  }
+
+  function miniCard(title, value, cls, hint, dataAttr) {
+    return `<button class="ncd-mini clickable" ${dataAttr || ''}>
+      <div class="ncd-card-title">${escHtml(title)}</div>
+      ${miniVal(value, cls, hint)}
+    </button>`;
+  }
+
+  function miniPct(title, value, hint, dataAttr) {
+    const cls = value == null ? '' : value >= 80 ? 'success' : value >= 60 ? 'warning' : 'danger';
+    const display = value != null ? fmtPct(value) : '\u2014';
+    return miniCard(title, display, value == null ? '' : cls, hint, dataAttr);
+  }
+
+  return `<section class="overview-panel new-code-dashboard">
     <p class="section-title">New Code Focus</p>
-    ${newCode?.baseline?.label ? `<div class="summary-baseline">${escHtml(newCode.baseline.label)}</div>` : ''}
-    <div class="metric-signals compact">
-      ${metricSignal('New Issues', metrics.new_issues || 0, (metrics.new_issues || 0) > 0 ? 'warning' : 'success', (metrics.new_issues || 0) > 0 ? 'card-yellow' : 'card-green', null, 'new-issues')}
-      ${metricSignal('New Bugs', metrics.new_bugs || 0, (metrics.new_bugs || 0) > 0 ? 'danger' : 'success', (metrics.new_bugs || 0) > 0 ? 'card-red' : 'card-green', 'bug')}
-      ${metricSignal('New Vulnerabilities', metrics.new_vulnerabilities || 0, (metrics.new_vulnerabilities || 0) > 0 ? 'warning' : 'success', (metrics.new_vulnerabilities || 0) > 0 ? 'card-yellow' : 'card-green', 'vulnerability')}
-      ${metricSignal('New Code Smells', metrics.new_code_smells || 0, 'muted', (metrics.new_code_smells || 0) > 0 ? 'card-yellow' : 'card-green', 'code_smell')}
-      ${metricSignalPct('New Coverage', metrics.new_coverage, coverageCardClass(metrics.new_coverage), 'coverage', 'No new lines')}
-      ${metricSignalPct('Changed Mutation', metrics.changed_mutation_score, mutationCardClass(metrics.changed_mutation_score), null, 'No mutation report')}
-      ${metricSignal('Survived Mutants', metrics.changed_mutants_survived || 0, (metrics.changed_mutants_survived || 0) > 0 ? 'warning' : 'success', (metrics.changed_mutants_survived || 0) > 0 ? 'card-yellow' : 'card-green', null, 'survived-mutants')}
-      ${metricSignalPct('New Duplication', metrics.new_duplications, duplicationCardClass(metrics.new_duplications), null, 'No new lines')}
-      ${metricSignal('Closed Issues', metrics.closed_issues || 0, 'success', (metrics.closed_issues || 0) > 0 ? 'card-green' : 'card-neutral', null, 'closed-issues')}
+    ${newCode?.baseline?.label ? `<div class="ncd-baseline">${escHtml(newCode.baseline.label)}</div>` : ''}
+    <div class="ncd-grid">
+      <button class="ncd-card clickable" data-overview-action="new-issues">
+        <div class="ncd-card-title">New Issues</div>
+        <div class="ncd-value ${issueCls}">${fmtNum(ni)}</div>
+        <div class="ncd-sub">
+          <div>Bugs: <span>${fmtNum(nb)}</span></div>
+          <div>Vulnerabilities: <span>${fmtNum(nv)}</span></div>
+          <div>Code Smells: <span>${fmtNum(ns)}</span></div>
+        </div>
+        <div class="ncd-badge ${badgeCls}">${badgeText}</div>
+      </button>
+      <button class="ncd-card clickable" data-overview-action="closed-issues">
+        <div class="ncd-card-title">Closed Issues</div>
+        <div class="ncd-value success">${fmtNum(ci)}</div>
+        <div class="ncd-trend"></div>
+        <div class="ncd-trend-label">7 days trend</div>
+      </button>
+    </div>
+    <div class="ncd-mini-grid">
+      ${miniCard('New Bugs', nb, nb > 0 ? 'danger' : 'success', null, 'data-mc-type="bug"')}
+      ${miniCard('New Vulnerabilities', nv, nv > 0 ? 'warning' : 'success', null, 'data-mc-type="vulnerability"')}
+      ${miniCard('New Code Smells', ns, ns > 0 ? 'warning' : 'success', null, 'data-mc-type="code_smell"')}
+      ${miniPct('New Coverage', nc, nc != null ? null : 'No new lines', 'data-overview-action="coverage"')}
+      ${miniPct('Changed Mutation', mut, mut != null ? null : 'No report')}
+      ${miniCard('New Duplication', nd != null ? fmtPct(nd) : '\u2014', nd != null && nd > 3 ? 'warning' : 'success', nd != null ? null : 'No new lines')}
+      ${miniCard('Survived Mutants', metrics.changed_mutants_survived || 0, (metrics.changed_mutants_survived || 0) > 0 ? 'warning' : 'success', null, 'data-overview-action="survived-mutants"')}
     </div>
   </section>`;
 }

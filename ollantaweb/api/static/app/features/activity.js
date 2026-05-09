@@ -258,12 +258,12 @@ function renderActivityTrend(entries, filteredCount, totalCount) {
   const min = yTicks.min;
   const spread = Math.max(max - min, 1);
 
-  const width = 760;
-  const height = 280;
-  const left = 54;
-  const right = 18;
-  const top = 26;
-  const bottom = 42;
+  const width = 1200;
+  const height = 400;
+  const left = 60;
+  const right = 20;
+  const top = 28;
+  const bottom = 48;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
 
@@ -293,7 +293,7 @@ function renderActivityTrend(entries, filteredCount, totalCount) {
     const y = yFor(entry.total_issues).toFixed(1);
     const gate = chartGateClass(entry.gate_status);
     const tooltip = buildChartTooltipText(entry.scan_id);
-    return `<circle cx="${x}" cy="${y}" r="5" class="activity-chart-point ${gate}" data-activity-scan="${escAttr(String(entry.scan_id || ''))}" tabindex="0" role="button" aria-label="Open issues for analysis ${escAttr(new Date(entry.analysis_date).toLocaleString())}"><title>${escHtml(tooltip)}</title></circle>`;
+    return `<circle cx="${x}" cy="${y}" r="3.5" class="activity-chart-point ${gate}" data-activity-scan="${escAttr(String(entry.scan_id || ''))}" tabindex="0" role="button" aria-label="Open issues for analysis ${escAttr(new Date(entry.analysis_date).toLocaleString())}"><title>${escHtml(tooltip)}</title></circle>`;
   }).join('');
 
   const eventTicks = points.flatMap((entry, index) => (entry.events || []).map(event => ({ entry, index, event }))).map(item => {
@@ -679,6 +679,13 @@ function bindActivityInteractions() {
         return;
       }
       renderView();
+      const sel = state.activityCompareSelection || [];
+      if (sel.length === 2) {
+        setTimeout(() => {
+          const panel = document.querySelector('.activity-compare-panel');
+          panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+      }
     });
   });
 

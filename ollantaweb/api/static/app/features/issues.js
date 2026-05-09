@@ -4,6 +4,7 @@ import {
   ISSUE_PAGE,
   SEV_BG,
   SEV_COLOR,
+  SEV_TEXT,
   SEV_LABEL,
   TYPE_ICON,
   TYPE_LABEL,
@@ -165,7 +166,7 @@ function buildIssuesHtml() {
         <button class="itbtn ok-btn" data-id="${issue.id}" data-res="fixed" title="Mark as fixed">\u2713</button>`;
     }
     return `<tr style="--row-sev-color:${color};--row-sev-bg:${bg}" class="sev-row${isClosed ? ' row-closed' : ''}" data-issue-idx="${idx}">
-      <td><span class="sev-badge" style="background:${color}">${escHtml(issue.severity)}</span></td>
+      <td><span class="sev-badge" style="background:${color};color:${SEV_TEXT[issue.severity] || '#fff'}">${escHtml(issue.severity)}</span></td>
       <td>${icon} ${escHtml((issue.type || '').replace('_', ' '))}</td>
       <td><span class="issue-track ${trackingClass}">${escHtml(trackingLabel)}</span></td>
       <td class="mono" style="font-size:11px">${escHtml(issue.rule_key || '')}</td>
@@ -375,7 +376,7 @@ export function openIssueDetail(issue) {
       </div>
       <div class="detail-prop">
         <span class="detail-prop-label">File</span>
-        <span class="detail-prop-value mono" style="font-size:12px;word-break:break-all">${escHtml(file)}</span>
+        <span class="detail-prop-value mono" style="font-size:12px">${escHtml(file)}</span>
       </div>
       <div class="detail-prop">
         <span class="detail-prop-label">Location</span>

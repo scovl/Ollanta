@@ -8,6 +8,13 @@ export const SEV_COLOR = {
   minor: '#22c55e',
   info: '#64748b',
 };
+export const SEV_TEXT = {
+  blocker: '#fff',
+  critical: '#fff',
+  major: '#1a1a1a',
+  minor: '#1a1a1a',
+  info: '#fff',
+};
 export const SEV_BG = {
   blocker: 'rgba(239,68,68,.12)',
   critical: 'rgba(249,115,22,.10)',

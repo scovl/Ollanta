@@ -530,7 +530,7 @@ export function bindProjectViewControls() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  document.querySelectorAll('.metric-card.clickable, .metric-signal.clickable').forEach(btn => {
+  document.querySelectorAll('.metric-card.clickable, .metric-signal.clickable, .ncd-card.clickable, .ncd-mini.clickable').forEach(btn => {
     btn.addEventListener('click', () => {
       const action = btn.dataset.overviewAction;
       if (action) {
