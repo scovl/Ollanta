@@ -13,17 +13,9 @@ var MetaFS embed.FS
 
 func init() {
 	ollantarules.MustRegister(MetaFS, "*.json",
-		CognitiveComplexity,
-		FunctionNestingDepth,
-		MagicNumber,
 		NamingConventions,
-		NoLargeFunctions,
-		NoNakedReturns,
 		TodoComment,
-		TooManyParameters,
-		UselessEqEq,
 		UselessIfElse,
-		UseFilepathJoin,
 		BadTmp,
 		MathRandom,
 		MD5UsedAsPassword,
@@ -40,5 +32,7 @@ func init() {
 		TemplateHTMLDoesNotEscape,
 		UnsafeUsage,
 		ZipTraversal,
+		// Wave 4 — Go
+		SwitchNoDefault,
 	)
 }

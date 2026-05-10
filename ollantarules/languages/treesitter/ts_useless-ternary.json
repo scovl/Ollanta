@@ -5,8 +5,12 @@
   "language": "typescript",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness", "readability"],
+  "tags": [
+    "correctness",
+    "readability"
+  ],
   "rationale": "'cond ? true : false' is equivalent to 'cond'; 'cond ? false : true' is equivalent to '!cond'.",
   "noncompliant_code": "const ok = result ? true : false;",
-  "compliant_code": "const ok = !!result;"
+  "compliant_code": "const ok = !!result;",
+  "reference_url": "https://eslint.org/docs/latest/rules/no-unneeded-ternary"
 }

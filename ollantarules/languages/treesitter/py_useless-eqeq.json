@@ -5,8 +5,11 @@
   "language": "python",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Self-comparisons never provide useful information at runtime. They are usually the result of a copy-paste error or incomplete refactoring.",
   "noncompliant_code": "if a == a:\n    return True",
-  "compliant_code": "if a == b:\n    return True"
+  "compliant_code": "if a == b:\n    return True",
+  "reference_url": "https://docs.python.org/3/reference/expressions.html#comparisons"
 }

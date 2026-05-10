@@ -5,8 +5,11 @@
   "language": "python",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Comparing values of incompatible types (e.g. integer vs string) in Python 3 always returns False for == and True for !=. This is rarely intentional.",
   "noncompliant_code": "if 42 == '42':\n    pass",
-  "compliant_code": "if str(42) == '42':\n    pass"
+  "compliant_code": "if str(42) == '42':\n    pass",
+  "reference_url": "https://docs.python.org/3/reference/expressions.html#comparisons"
 }

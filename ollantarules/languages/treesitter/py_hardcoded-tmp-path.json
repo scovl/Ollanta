@@ -5,8 +5,12 @@
   "language": "python",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "portability"],
+  "tags": [
+    "convention",
+    "portability"
+  ],
   "rationale": "Using hardcoded /tmp/ paths is not portable across platforms and is susceptible to symlink attacks. Use tempfile module instead.",
   "noncompliant_code": "with open('/tmp/data.txt', 'w') as f:\n    f.write(data)",
-  "compliant_code": "import tempfile\nwith tempfile.NamedTemporaryFile(mode='w', delete=False) as f:\n    f.write(data)"
+  "compliant_code": "import tempfile\nwith tempfile.NamedTemporaryFile(mode='w', delete=False) as f:\n    f.write(data)",
+  "reference_url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
 }

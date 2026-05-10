@@ -5,8 +5,11 @@
   "language": "python",
   "type": "bug",
   "severity": "major",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Python __init__ must return None implicitly. An explicit return statement is a TypeError at runtime.",
   "noncompliant_code": "class User:\n    def __init__(self, name):\n        if not name:\n            return\n        self.name = name",
-  "compliant_code": "class User:\n    def __init__(self, name):\n        if not name:\n            raise ValueError('name required')\n        self.name = name"
+  "compliant_code": "class User:\n    def __init__(self, name):\n        if not name:\n            raise ValueError('name required')\n        self.name = name",
+  "reference_url": "https://docs.python.org/3/reference/datamodel.html#object.__init__"
 }

@@ -5,8 +5,13 @@
   "language": "python",
   "type": "bug",
   "severity": "major",
-  "tags": ["correctness", "async", "performance"],
+  "tags": [
+    "correctness",
+    "async",
+    "performance"
+  ],
   "rationale": "time.sleep is a blocking call. In async functions it freezes the event loop and all concurrent tasks.",
   "noncompliant_code": "async def fetch():\n    time.sleep(1)\n    return await get()",
-  "compliant_code": "async def fetch():\n    await asyncio.sleep(1)\n    return await get()"
+  "compliant_code": "async def fetch():\n    await asyncio.sleep(1)\n    return await get()",
+  "reference_url": "https://docs.python.org/3/library/asyncio-task.html"
 }

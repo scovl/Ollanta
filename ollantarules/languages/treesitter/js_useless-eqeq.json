@@ -5,8 +5,11 @@
   "language": "javascript",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Self-comparisons never provide useful information at runtime. They are usually the result of a copy-paste error or incomplete refactoring.",
   "noncompliant_code": "if (a == a) {\n    return true;\n}",
-  "compliant_code": "if (a === b) {\n    return true;\n}"
+  "compliant_code": "if (a === b) {\n    return true;\n}",
+  "reference_url": "https://eslint.org/docs/latest/rules/no-self-compare"
 }

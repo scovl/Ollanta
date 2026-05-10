@@ -5,7 +5,11 @@
   "language": "go",
   "type": "vulnerability",
   "severity": "major",
-  "tags": ["security", "dos"],
+  "tags": [
+    "security",
+    "dos",
+    "cwe-409"
+  ],
   "rationale": "Compressed data can expand to many times its original size. Always limit the amount of data read from a decompressor.",
   "noncompliant_code": "r, err := gzip.NewReader(src)",
   "compliant_code": "r, err := gzip.NewReader(src)\nif err != nil {\n  return err\n}\ndefer r.Close()\nlr := io.LimitReader(r, maxDecompressSize)"

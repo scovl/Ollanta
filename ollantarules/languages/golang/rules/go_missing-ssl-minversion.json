@@ -5,7 +5,11 @@
   "language": "go",
   "type": "vulnerability",
   "severity": "major",
-  "tags": ["security", "tls"],
+  "tags": [
+    "security",
+    "tls",
+    "cwe-295"
+  ],
   "rationale": "Go's default TLS minimum version has improved over time, but explicit configuration ensures you never accept weak protocols like TLS 1.0 or 1.1.",
   "noncompliant_code": "cfg := &tls.Config{}",
   "compliant_code": "cfg := &tls.Config{\n  MinVersion: tls.VersionTLS12,\n}"

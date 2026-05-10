@@ -5,8 +5,12 @@
   "language": "python",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness", "error-handling"],
+  "tags": [
+    "correctness",
+    "error-handling"
+  ],
   "rationale": "Functions like os.remove and os.rename can raise OSError. Discarding the call result (where applicable) or ignoring exceptions hides failures.",
   "noncompliant_code": "os.remove(path)\nos.rename(old, new)",
-  "compliant_code": "import os\ntry:\n    os.remove(path)\nexcept OSError as e:\n    log.error(e)"
+  "compliant_code": "import os\ntry:\n    os.remove(path)\nexcept OSError as e:\n    log.error(e)",
+  "reference_url": "https://docs.python.org/3/tutorial/errors.html"
 }

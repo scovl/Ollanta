@@ -5,8 +5,12 @@
   "language": "python",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["correctness", "portability"],
+  "tags": [
+    "correctness",
+    "portability"
+  ],
   "rationale": "On Windows, open() defaults to the system ANSI code page (e.g. CP1252), while on Linux it uses UTF-8. Explicit encoding ensures consistent behavior.",
   "noncompliant_code": "with open('data.txt') as f:\n    content = f.read()",
-  "compliant_code": "with open('data.txt', encoding='utf-8') as f:\n    content = f.read()"
+  "compliant_code": "with open('data.txt', encoding='utf-8') as f:\n    content = f.read()",
+  "reference_url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
 }

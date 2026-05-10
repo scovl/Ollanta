@@ -5,8 +5,12 @@
   "language": "javascript",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "debug"],
+  "tags": [
+    "convention",
+    "debug"
+  ],
   "rationale": "Debugging statements clutter production output, may leak information, and degrade user experience. Remove them before deployment.",
   "noncompliant_code": "function process(data) {\n    debugger;\n    alert('processing');\n    return transform(data);\n}",
-  "compliant_code": "function process(data) {\n    logger.debug('processing data', { id: data.id });\n    return transform(data);\n}"
+  "compliant_code": "function process(data) {\n    logger.debug('processing data', { id: data.id });\n    return transform(data);\n}",
+  "reference_url": "https://eslint.org/docs/latest/rules/no-debugger"
 }

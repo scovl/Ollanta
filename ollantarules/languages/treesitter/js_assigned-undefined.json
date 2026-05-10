@@ -5,8 +5,12 @@
   "language": "javascript",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "readability"],
+  "tags": [
+    "convention",
+    "readability"
+  ],
   "rationale": "Variables in JavaScript are already undefined by default. Explicit assignment adds noise and may confuse readers about intent.",
   "noncompliant_code": "let x = undefined;",
-  "compliant_code": "let x;"
+  "compliant_code": "let x;",
+  "reference_url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/undefined"
 }

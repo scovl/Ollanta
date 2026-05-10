@@ -5,7 +5,11 @@
   "language": "go",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["correctness", "dead-code"],
+  "tags": [
+    "correctness",
+    "dead-code",
+    "cwe-489"
+  ],
   "rationale": "Constant boolean conditions in if statements make branches unreachable or always execute. This obscures intent and accumulates technical debt.",
   "noncompliant_code": "func process(x int) int {\n    if true {\n        return x * 2\n    }\n    return x\n}",
   "compliant_code": "func process(x int) int {\n    return x * 2\n}"

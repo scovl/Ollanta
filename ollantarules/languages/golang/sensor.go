@@ -48,7 +48,7 @@ func (s *GoSensor) Analyze(path string, source []byte, activeRules map[string]bo
 		if activeRules != nil && !activeRules[a.Meta.Key] {
 			continue
 		}
-		a := a
+		rule := a
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -65,7 +65,7 @@ func (s *GoSensor) Analyze(path string, source []byte, activeRules map[string]bo
 				AST:      file,
 				FileSet:  fset,
 			}
-			found := a.Check(ctx)
+			found := rule.Check(ctx)
 			if len(found) > 0 {
 				mu.Lock()
 				issues = append(issues, found...)

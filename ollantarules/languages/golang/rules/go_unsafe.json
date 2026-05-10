@@ -5,8 +5,12 @@
   "language": "go",
   "type": "vulnerability",
   "severity": "major",
-  "tags": ["security", "memory-safety"],
+  "tags": [
+    "security",
+    "memory-safety"
+  ],
   "rationale": "unsafe.Pointer and related functions can lead to undefined behavior, memory corruption, and security vulnerabilities.",
   "noncompliant_code": "ptr := unsafe.Pointer(uintptr(unsafe.Pointer(&x)) + offset)",
-  "compliant_code": "Use safe Go abstractions and avoid unsafe unless absolutely necessary with thorough review."
+  "compliant_code": "Use safe Go abstractions and avoid unsafe unless absolutely necessary with thorough review.",
+  "reference_url": "https://github.com/securego/gosec#available-rules"
 }

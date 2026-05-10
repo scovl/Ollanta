@@ -5,8 +5,12 @@
   "language": "python",
   "type": "bug",
   "severity": "major",
-  "tags": ["correctness", "runtime-error"],
+  "tags": [
+    "correctness",
+    "runtime-error"
+  ],
   "rationale": "Modifying a list during iteration skips elements or causes index errors. Build a new list or iterate over a copy.",
   "noncompliant_code": "for item in items:\n    if item.is_expired():\n        items.remove(item)",
-  "compliant_code": "items = [item for item in items if not item.is_expired()]"
+  "compliant_code": "items = [item for item in items if not item.is_expired()]",
+  "reference_url": "https://docs.python.org/3/tutorial/datastructures.html"
 }

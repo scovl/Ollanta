@@ -5,8 +5,12 @@
   "language": "python",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["convention", "incomplete"],
+  "tags": [
+    "convention",
+    "incomplete"
+  ],
   "rationale": "A pass-only body without documentation suggests unfinished code. Add a docstring explaining the intent or implement the body.",
   "noncompliant_code": "def process(data):\n    pass",
-  "compliant_code": "def process(data):\n    \"\"\"Process the given data and return normalized result.\"\"\"\n    pass"
+  "compliant_code": "def process(data):\n    \"\"\"Process the given data and return normalized result.\"\"\"\n    pass",
+  "reference_url": "https://docs.python.org/3/reference/simple_stmts.html#the-pass-statement"
 }

@@ -5,8 +5,11 @@
   "language": "javascript",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Self-assignments do not change the variable's value and are usually the result of an incomplete refactoring or copy-paste error.",
   "noncompliant_code": "x = x;",
-  "compliant_code": "x = y;"
+  "compliant_code": "x = y;",
+  "reference_url": "https://eslint.org/docs/latest/rules/no-self-assign"
 }

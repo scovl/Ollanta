@@ -267,6 +267,22 @@ func TestTreeSitterSensor_JS_DetectEval_NoFalsePositive(t *testing.T) {
 
 Naming convention: append `_NoFalsePositive` to the test name (or `_NoFalsePositive{Condition}` for multiple scenarios).
 
+### 14. No Rule Without an External Reference
+
+Every rule registered in the catalog and registry MUST have a `reference_url` pointing to an authoritative external source that validates the rule's existence and motivation. This ensures every issue the user sees can be traced to a known standard.
+
+Acceptable sources:
+- **MITRE CWE** — automatically populated when a rule has a `cwe-NNN` tag
+- **Go community** — Effective Go, Go FAQ, Go wiki, golangci-lint docs
+- **OWASP** — OWASP cheat sheets, testing guides
+- **Language/framework docs** — official documentation for APIs/functions being flagged
+
+Unacceptable sources:
+- **SonarQube RSPEC** — copyright issues (SonarSource intellectual property)
+- **No source at all** — rules without any external reference must NOT be registered. Remove their `ruleDetail` from the catalog and their variable from `MustRegister` in `embed.go`.
+
+If a rule cannot be traced to a public, authoritative source, it is opinion, not analysis. Remove it.
+
 ## Conventions
 
 | Convention | Example |

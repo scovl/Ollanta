@@ -5,8 +5,12 @@
   "language": "go",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["correctness", "portability"],
+  "tags": [
+    "correctness",
+    "portability"
+  ],
   "rationale": "String concatenation does not handle path separators correctly across platforms and may introduce path traversal vulnerabilities. filepath.Join ensures cross-platform correctness.",
   "noncompliant_code": "path := dir + \"/\" + filename\nfull := fmt.Sprintf(\"%s/%s\", base, name)",
-  "compliant_code": "path := filepath.Join(dir, filename)\nfull := filepath.Join(base, name)"
+  "compliant_code": "path := filepath.Join(dir, filename)\nfull := filepath.Join(base, name)",
+  "reference_url": "https://go.dev/doc/effective_go"
 }

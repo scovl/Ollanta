@@ -5,8 +5,12 @@
   "language": "python",
   "type": "code_smell",
   "severity": "minor",
-  "tags": ["correctness", "resource-leak"],
+  "tags": [
+    "correctness",
+    "resource-leak"
+  ],
   "rationale": "Unclosed file handles leak resources. Use a with statement or ensure close() is called.",
   "noncompliant_code": "open('data.txt')",
-  "compliant_code": "with open('data.txt') as f:\n    data = f.read()"
+  "compliant_code": "with open('data.txt') as f:\n    data = f.read()",
+  "reference_url": "https://docs.python.org/3/tutorial/inputoutput.html#reading-and-writing-files"
 }

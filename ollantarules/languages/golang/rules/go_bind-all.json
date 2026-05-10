@@ -5,7 +5,11 @@
   "language": "go",
   "type": "vulnerability",
   "severity": "major",
-  "tags": ["security", "network"],
+  "tags": [
+    "security",
+    "network",
+    "cwe-319"
+  ],
   "rationale": "Services bound to all interfaces are reachable from any network segment, including untrusted ones. Bind to a specific interface or localhost when possible.",
   "noncompliant_code": "ln, err := net.Listen(\"tcp\", \"0.0.0.0:8080\")",
   "compliant_code": "ln, err := net.Listen(\"tcp\", \"127.0.0.1:8080\")"

@@ -5,7 +5,11 @@
   "language": "go",
   "type": "vulnerability",
   "severity": "major",
-  "tags": ["security", "path-traversal"],
+  "tags": [
+    "security",
+    "path-traversal",
+    "cwe-22"
+  ],
   "rationale": "filepath.Clean resolves . and .. but still allows absolute paths and paths outside the intended directory. Combine with validation or chroot.",
   "noncompliant_code": "f, err := os.Open(filepath.Clean(userPath))",
   "compliant_code": "clean := filepath.Clean(userPath)\nif !strings.HasPrefix(clean, safeBase) {\n  return errors.New(\"path traversal detected\")\n}\nf, err := os.Open(clean)"

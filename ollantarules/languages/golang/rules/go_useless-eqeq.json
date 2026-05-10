@@ -5,8 +5,11 @@
   "language": "go",
   "type": "bug",
   "severity": "minor",
-  "tags": ["correctness"],
+  "tags": [
+    "correctness"
+  ],
   "rationale": "Self-comparisons never provide useful information at runtime. They are usually the result of a copy-paste error or incomplete refactoring.",
   "noncompliant_code": "func check(a, b int) bool {\n    return a == a\n}",
-  "compliant_code": "func check(a, b int) bool {\n    return a == b\n}"
+  "compliant_code": "func check(a, b int) bool {\n    return a == b\n}",
+  "reference_url": "https://go.dev/doc/effective_go"
 }
