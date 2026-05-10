@@ -38,4 +38,6 @@ type Rule struct {
 	// Threshold is non-nil for metric-threshold rules (MetricHunter pattern).
 	// Nil for pattern-matching rules.
 	Threshold *Threshold `json:"threshold,omitempty"`
+	// ReferenceURL is an optional link to official documentation, CWE, or standard.
+	ReferenceURL string `json:"reference_url,omitempty"`
 }

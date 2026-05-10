@@ -1331,6 +1331,12 @@ async function fetchRuleDetail(ruleKey: string): Promise<void> {
         <pre class="rule-code compliant"><code>${esc(rule.compliant_code)}</code></pre>
       </div>`;
     }
+    if (rule.reference_url) {
+      rhtml += `<div class="detail-section">
+        <div class="detail-section-title">Reference</div>
+        <p><a href="${esc(rule.reference_url)}" target="_blank" rel="noopener">${esc(rule.reference_url)}</a></p>
+      </div>`;
+    }
     detailRuleHtml = rhtml || `<div class="detail-empty">No additional rule details available.</div>`;
   } catch {
     detailRuleHtml = `<div class="detail-empty">Rule details are not available for this issue.</div>`;
@@ -1370,6 +1376,7 @@ async function copyIssueDetail(issue: Issue): Promise<void> {
       if (rule.rationale) lines.push(`\nWhy is this a problem?\n${rule.rationale}`);
       if (rule.noncompliant_code) lines.push(`\nNoncompliant code:\n${rule.noncompliant_code}`);
       if (rule.compliant_code) lines.push(`\nCompliant code:\n${rule.compliant_code}`);
+      if (rule.reference_url) lines.push(`\nReference: ${rule.reference_url}`);
     }
   } catch { /* rule details unavailable */ }
 

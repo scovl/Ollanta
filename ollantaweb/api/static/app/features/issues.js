@@ -438,6 +438,10 @@ export function openIssueDetail(issue) {
         html += `<div class="detail-section-title">\u2714 Compliant Code</div>
           <pre class="rule-code compliant"><code>${escHtml(rule.compliant_code)}</code></pre>`;
       }
+      if (rule.reference_url) {
+        html += `<div class="detail-section-title">Reference</div>
+          <p><a href="${escAttr(rule.reference_url)}" target="_blank" rel="noopener">${escHtml(rule.reference_url)}</a></p>`;
+      }
       el.innerHTML = html || '';
     }).catch(() => {
       const el = document.getElementById('rule-detail-section');

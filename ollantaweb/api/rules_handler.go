@@ -33,6 +33,7 @@ type ruleDetail struct {
 	PackName         string `json:"pack_name,omitempty"`
 	VersionHash      string `json:"version_hash,omitempty"`
 	Lifecycle        string `json:"lifecycle,omitempty"`
+	ReferenceURL     string `json:"reference_url,omitempty"`
 }
 
 // RulesHandler serves rule metadata for the issue detail panel.
@@ -81,6 +82,7 @@ func catalogToDetail(rule *coredomain.Rule) *ruleDetail {
 		NoncompliantCode: rule.NoncompliantCode,
 		CompliantCode:    rule.CompliantCode,
 		Origin:           "bundled",
+		ReferenceURL:     rule.ReferenceURL,
 	}
 }
 

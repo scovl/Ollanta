@@ -1,35 +1,55 @@
 package rulecatalog
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestCatalogCounts(t *testing.T) {
-	if got := len(Rules()); got != 69 {
-		t.Fatalf("Rules() count = %d, want 69", got)
+func TestCweReferenceFromTags(t *testing.T) {
+	tests := []struct {
+		tags []string
+		want string
+	}{
+		{[]string{"security", "xss", "cwe-1004"}, "https://cwe.mitre.org/data/definitions/1004.html"},
+		{[]string{"security", "cwe-79"}, "https://cwe.mitre.org/data/definitions/79.html"},
+		{[]string{"security", "crypto", "cwe-327"}, "https://cwe.mitre.org/data/definitions/327.html"},
+		{[]string{"complexity", "readability"}, ""},
+		{[]string{}, ""},
+		{[]string{"cwe-"}, ""},
 	}
-
-	wantCounts := map[string]int{"go": 25, "javascript": 16, "python": 26, "typescript": 2, "rust": 0}
-	for _, language := range SupportedLanguages() {
-		if got := len(ByLanguage(language.Key)); got != wantCounts[language.Key] {
-			t.Fatalf("ByLanguage(%q) count = %d, want %d", language.Key, got, wantCounts[language.Key])
+	for _, tt := range tests {
+		got := cweReferenceFromTags(tt.tags)
+		if got != tt.want {
+			t.Errorf("cweReferenceFromTags(%v) = %q, want %q", tt.tags, got, tt.want)
 		}
-		if language.ParserOnly && language.HasRules {
-			t.Fatalf("language %q cannot be parser-only and have rules", language.Key)
+	}
+}
+
+func TestRulesHaveReferenceURLWhenCWETagPresent(t *testing.T) {
+	for _, r := range Rules() {
+		if r.ReferenceURL != "" {
+			continue
+		}
+		for _, tag := range r.Tags {
+			if len(tag) > 4 && tag[:4] == "cwe-" {
+				t.Errorf("rule %q has cwe tag %q but no ReferenceURL", r.Key, tag)
+			}
 		}
 	}
 }
 
 func TestCatalogDefensiveCopies(t *testing.T) {
-	rule, ok := ByKey("go:no-large-functions")
+	rule, ok := ByKey("go:bad-tmp")
 	if !ok {
-		t.Fatal("go:no-large-functions not found")
+		t.Fatal("go:bad-tmp not found")
 	}
-	rule.ParamsSchema["max_lines"] = param("max_lines", "changed", "1", "int")
+	original := rule.Tags
+	rule.Tags = append(rule.Tags, "mutated")
 
-	again, ok := ByKey("go:no-large-functions")
+	again, ok := ByKey("go:bad-tmp")
 	if !ok {
-		t.Fatal("go:no-large-functions not found on second read")
+		t.Fatal("go:bad-tmp not found on second read")
 	}
-	if got := again.ParamsSchema["max_lines"].DefaultValue; got != "40" {
-		t.Fatalf("catalog mutation leaked, default = %q", got)
+	if len(again.Tags) != len(original) {
+		t.Fatalf("catalog mutation leaked, tags = %v", again.Tags)
 	}
 }

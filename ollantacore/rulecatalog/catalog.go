@@ -4,6 +4,7 @@ package rulecatalog
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/scovl/ollanta/ollantacore/domain"
 )
@@ -26,63 +27,29 @@ var supportedLanguages = []Language{
 }
 
 var builtinRules = []*domain.Rule{
-	// ── Go rules (14) ────────────────────────────────────────────────────────
-	ruleDetail("go:cognitive-complexity", "Cognitive Complexity", "go", domain.TypeCodeSmell, domain.SeverityCritical,
-		"Functions with high cognitive complexity are harder to understand, test, and maintain. Cognitive complexity measures how difficult code is to understand by considering nesting depth, structural complexity, and control flow breaks.",
-		"func process(items []int) int {\n    total := 0\n    for i := 0; i < len(items); i++ {\n        if items[i] > 0 {\n            if items[i]%2 == 0 {\n                if items[i] > 10 {\n                    total += items[i] * 2\n                } else if items[i] > 5 {\n                    total += items[i]\n                } else {\n                    if items[i] > 0 {\n                        total += 1\n                    }\n                }\n            }\n        }\n    }\n    return total\n}",
-		"func process(items []int) int {\n    total := 0\n    for _, item := range items {\n        total += processItem(item)\n    }\n    return total\n}\n\nfunc processItem(item int) int {\n    if item <= 0 {\n        return 0\n    }\n    return calculateValue(item)\n}\n\nfunc calculateValue(item int) int {\n    if item > 10 {\n        return item * 2\n    }\n    if item > 5 {\n        return item\n    }\n    return 1\n}",
-		[]string{"complexity", "readability"}, param("max_complexity", "Maximum allowed cognitive complexity", "15", "int")),
-	ruleDetail("go:function-nesting-depth", "Function Nesting Depth", "go", domain.TypeCodeSmell, domain.SeverityMajor,
-		"Deeply nested code is harder to follow and increases the risk of logic errors. Each additional level of nesting adds cognitive load and makes the code more difficult to test and maintain.",
-		"func process(x int) {\n    if x > 0 {\n        for i := 0; i < x; i++ {\n            if i%2 == 0 {\n                switch i {\n                case 2:\n                    if x > 5 {\n                        // logically deep nest\n                    }\n                }\n            }\n        }\n    }\n}",
-		"func process(x int) {\n    if x <= 0 {\n        return\n    }\n    handleEvens(x)\n}\n\nfunc handleEvens(limit int) {\n    for i := 0; i < limit; i++ {\n        if i%2 != 0 {\n            continue\n        }\n        processEven(i, limit)\n    }\n}\n\nfunc processEven(val, limit int) {\n    if val == 2 && limit > 5 {\n        // flat logic with guard clauses\n    }\n}",
-		[]string{"complexity", "readability"}, param("max_depth", "Maximum allowed nesting depth", "4", "int")),
-	ruleDetail("go:magic-number", "Magic Number", "go", domain.TypeCodeSmell, domain.SeverityMinor,
-		"Magic numbers are literal values used directly in code without explanation. They make code harder to understand and maintain because the meaning of the value is not clear. Extracting them into named constants improves readability.",
-		"func calculatePrice(base float64) float64 {\n    return base * 1.21\n}\n\nfunc daysToSeconds(d int) int {\n    return d * 86400\n}",
-		"const taxRate = 1.21\n\nfunc calculatePrice(base float64) float64 {\n    return base * taxRate\n}\n\nconst secondsPerDay = 86400\n\nfunc daysToSeconds(d int) int {\n    return d * secondsPerDay\n}",
-		[]string{"readability", "convention"}, param("authorized_numbers", "Comma-separated list of allowed literal values", "0,1,2,-1", "string")),
-	ruleDetail("go:naming-conventions", "Naming Conventions", "go", domain.TypeCodeSmell, domain.SeverityMinor,
-		"Go has strong conventions for identifier naming. Exported identifiers should use MixedCaps, unexported identifiers should use mixedCaps. Using underscores in names goes against these conventions.",
+	// ── Go rules ─────────────────────────────────────────────────────────────
+	ruleWithRef("go:naming-conventions", "Naming Conventions", "go", domain.TypeCodeSmell, domain.SeverityMinor,
+		"https://go.dev/doc/effective_go#names",
+		"Go has strong conventions for identifier naming. Exported identifiers use MixedCaps, unexported use mixedCaps.",
 		"type User_info struct {\n    FirstName string\n}\n\nfunc Get_User() *User_info {\n    return nil\n}",
 		"type UserInfo struct {\n    FirstName string\n}\n\nfunc GetUser() *UserInfo {\n    return nil\n}",
 		[]string{"convention", "readability"}),
-	ruleDetail("go:no-large-functions", "No Large Functions", "go", domain.TypeCodeSmell, domain.SeverityMajor,
-		"Large functions try to do too much, making them difficult to understand, test, and modify safely. Smaller functions with clear responsibilities lead to better-structured, more reusable code.",
-		"func handleRequest(w http.ResponseWriter, r *http.Request) {\n    // 80+ lines of parsing, validation, business logic,\n    // database calls, error handling, and response formatting\n    // all in a single function\n}",
-		"func handleRequest(w http.ResponseWriter, r *http.Request) {\n    req, err := parseRequest(r)\n    if err != nil {\n        http.Error(w, err.Error(), 400)\n        return\n    }\n    result, err := processRequest(req)\n    if err != nil {\n        http.Error(w, err.Error(), 500)\n        return\n    }\n    writeJSON(w, result)\n}",
-		[]string{"size", "complexity"}, param("max_lines", "Maximum allowed lines per function", "40", "int")),
-	ruleDetail("go:no-naked-returns", "No Naked Returns", "go", domain.TypeBug, domain.SeverityCritical,
-		"Naked returns in Go functions with named return values reduce readability, especially in longer functions where the returned values are not immediately visible to the reader.",
-		"func split(sum int) (x, y int) {\n    x = sum * 4 / 9\n    y = sum - x\n    return\n}",
-		"func split(sum int) (x, y int) {\n    x = sum * 4 / 9\n    y = sum - x\n    return x, y\n}",
-		[]string{"correctness", "readability"}, param("min_lines", "Minimum function length to flag naked returns", "5", "int")),
+	ruleWithRef("go:loop-pointer", "Loop Variable Pointer Capture", "go", domain.TypeBug, domain.SeverityMajor,
+		"https://go.dev/doc/faq#closures_and_goroutines",
+		"Go reuses the same loop variable address across iterations. Passing it as a function argument creates a copy and avoids the classic goroutine loop variable capture bug.",
+		"for _, item := range items {\n    go func() {\n        process(item)\n    }()\n}",
+		"for _, item := range items {\n    go func(i Item) {\n        process(i)\n    }(item)\n}",
+		[]string{"correctness", "concurrency"}),
 	ruleDetail("go:todo-comment", "TODO Comment", "go", domain.TypeCodeSmell, domain.SeverityInfo,
 		"TODO comments indicate incomplete work and can accumulate over time, creating technical debt that is never addressed. Tracking them helps teams manage and reduce this debt.",
 		"func calculate(x int) int {\n    // TODO: handle edge case\n    return x * 2\n}",
 		"func calculate(x int) int {\n    // Edge case handled by validateInput called before this function.\n    return x * 2\n}",
-		[]string{"convention"}),
-	ruleDetail("go:too-many-parameters", "Too Many Parameters", "go", domain.TypeCodeSmell, domain.SeverityMajor,
-		"Functions with too many parameters are hard to call correctly, easy to misorder, and difficult to extend. Using a parameter struct or splitting the function into smaller functions improves clarity.",
-		"func CreateUser(name, email, phone, addr, city, state, zip, country string) error {\n    // ...\n}",
-		"type CreateUserRequest struct {\n    Name    string\n    Email   string\n    Phone   string\n    Address string\n    City    string\n    State   string\n    Zip     string\n    Country string\n}\n\nfunc CreateUser(req CreateUserRequest) error {\n    // ...\n}",
-		[]string{"design", "readability"}, param("max_params", "Maximum allowed parameter count", "5", "int")),
-
-	ruleDetail("go:useless-eqeq", "Useless Self-Comparison", "go", domain.TypeBug, domain.SeverityMinor,
-		"Comparing a variable to itself (x == x or x != x) is always deterministic and indicates a bug or dead code.",
-		"func check(a, b int) bool {\n    return a == a\n}",
-		"func check(a, b int) bool {\n    return a == b\n}",
-		[]string{"correctness"}),
+		[]string{"convention", "cwe-546"}),
 	ruleDetail("go:useless-ifelse", "Useless If/Else", "go", domain.TypeCodeSmell, domain.SeverityMinor,
 		"If statements with constant true or false conditions are dead code and should be removed or corrected.",
 		"func process(x int) int {\n    if true {\n        return x * 2\n    }\n    return x\n}",
 		"func process(x int) int {\n    return x * 2\n}",
-		[]string{"correctness", "dead-code"}),
-	ruleDetail("go:use-filepath-join", "Use filepath.Join for Path Construction", "go", domain.TypeCodeSmell, domain.SeverityMinor,
-		"Building file paths by concatenating strings with + or fmt.Sprintf is fragile and platform-dependent. Use filepath.Join instead.",
-		"path := dir + \"/\" + filename\nfull := fmt.Sprintf(\"%s/%s\", base, name)",
-		"path := filepath.Join(dir, filename)\nfull := filepath.Join(base, name)",
-		[]string{"correctness", "portability"}),
+		[]string{"correctness", "dead-code", "cwe-489"}),
 	ruleDetail("go:bad-tmp", "Insecure Temporary File", "go", domain.TypeVulnerability, domain.SeverityMajor,
 		"Creating temporary files with hardcoded /tmp/ paths is insecure. Use os.CreateTemp to ensure atomic creation and safe permissions.",
 		"f, err := os.Create(\"/tmp/myapp-data.txt\")\nif err != nil {\n    log.Fatal(err)\n}",
@@ -391,6 +358,11 @@ var builtinRules = []*domain.Rule{
 		"const clean = input.replace(/</g, '');",
 		"import DOMPurify from 'dompurify';\nconst clean = DOMPurify.sanitize(input);",
 		[]string{"security", "xss", "cwe-116"}),
+	ruleDetail("go:switch-no-default", "Switch Without Default", "go", domain.TypeBug, domain.SeverityMajor,
+		"Switch statements should have a default clause for defensive programming. Missing defaults can lead to unhandled cases and silent bugs.",
+		"switch tag {\ncase 0, 1, 2, 3:\n    foo()\ncase 4, 5, 6, 7:\n    bar()\n}",
+		"switch tag {\ncase 0, 1, 2, 3:\n    foo()\ncase 4, 5, 6, 7:\n    bar()\ndefault:\n    qix()\n}",
+		[]string{"cwe-478", "correctness"}),
 }
 
 // SupportedLanguages returns all languages known to the scanner.
@@ -484,6 +456,27 @@ func ruleDetail(key, name, language string, issueType domain.IssueType, severity
 	r.Rationale = rationale
 	r.NoncompliantCode = noncompliantCode
 	r.CompliantCode = compliantCode
+	r.ReferenceURL = cweReferenceFromTags(tags)
+	return r
+}
+
+// cweReferenceFromTags extracts the first cwe-{ID} tag and returns the
+// MITRE CWE reference URL. Returns empty string if no CWE tag is found.
+// CWE entries are maintained by MITRE and are in the public domain.
+func cweReferenceFromTags(tags []string) string {
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, "cwe-") {
+			if id := strings.TrimPrefix(tag, "cwe-"); id != "" {
+				return "https://cwe.mitre.org/data/definitions/" + id + ".html"
+			}
+		}
+	}
+	return ""
+}
+
+func ruleWithRef(key, name, language string, issueType domain.IssueType, severity domain.Severity, referenceURL, rationale, noncompliantCode, compliantCode string, tags []string, params ...domain.ParamDef) *domain.Rule {
+	r := ruleDetail(key, name, language, issueType, severity, rationale, noncompliantCode, compliantCode, tags, params...)
+	r.ReferenceURL = referenceURL
 	return r
 }
 

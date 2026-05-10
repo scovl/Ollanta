@@ -1,13 +1,17 @@
 .PHONY: build test lint fmt clean run push up down recreate logs release release-dry-run swagger
 
 PKGS := \
+	github.com/scovl/ollanta/domain/... \
+	github.com/scovl/ollanta/application/... \
 	github.com/scovl/ollanta/ollantacore/... \
+	github.com/scovl/ollanta/ollantaengine/... \
 	github.com/scovl/ollanta/ollantaparser/... \
 	github.com/scovl/ollanta/ollantarules/... \
 	github.com/scovl/ollanta/ollantascanner/... \
-	github.com/scovl/ollanta/ollantaengine/...
+	github.com/scovl/ollanta/ollantastore/... \
+	github.com/scovl/ollanta/ollantaweb/...
 
-DIRS := ollantacore ollantaparser ollantarules ollantascanner ollantaengine
+DIRS := domain application ollantacore ollantaengine ollantaparser ollantarules ollantascanner ollantastore ollantaweb
 
 # CGO is required by go-tree-sitter. On Windows, point to the MSYS2 MinGW gcc.
 export CGO_ENABLED := 1
@@ -33,17 +37,21 @@ test:
 	go test $(PKGS)
 
 lint:
+	golangci-lint run ./domain/...
+	golangci-lint run ./application/...
 	golangci-lint run ./ollantacore/...
+	golangci-lint run ./ollantaengine/...
 	golangci-lint run ./ollantaparser/...
 	golangci-lint run ./ollantarules/...
 	golangci-lint run ./ollantascanner/...
-	golangci-lint run ./ollantaengine/...
+	golangci-lint run ./ollantastore/...
 
 fmt:
 	gofmt -w $(DIRS)
 
 clean:
 	go clean $(PKGS)
+	-rmdir /s /q $(RELEASE_DIR)
 
 # ── Run: scan + local interactive UI ─────────────────────────────────────
 #   make run                        scan current directory

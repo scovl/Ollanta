@@ -38,6 +38,9 @@ type RuleMeta struct {
 	Tags []string `json:"tags,omitempty"`
 	// Params is the list of configurable parameters with defaults.
 	Params []domain.ParamDef `json:"params,omitempty"`
+	// ReferenceURL is an optional link to the official documentation, CWE, or
+	// standard that defines or motivates this rule.
+	ReferenceURL string `json:"reference_url,omitempty"`
 }
 
 // CheckFunc is the execution signature for a rule.

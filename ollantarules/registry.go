@@ -3,6 +3,7 @@ package ollantarules
 import (
 	"fmt"
 	"io/fs"
+	"strings"
 
 	"github.com/scovl/ollanta/ollantacore/domain"
 )
@@ -78,6 +79,7 @@ func (r *Registry) Rules() []*domain.Rule {
 			DefaultSeverity: rule.Meta.DefaultSeverity,
 			Tags:            rule.Meta.Tags,
 			ParamsSchema:    schema,
+			ReferenceURL:    rule.Meta.ReferenceURL,
 		}
 	}
 	return out
@@ -116,10 +118,24 @@ func MustRegister(fsys fs.FS, pattern string, rules ...Rule) {
 		if !ok {
 			panic(fmt.Sprintf("ollantarules.MustRegister: no metadata for key %q", rule.MetaKey))
 		}
+		if m.ReferenceURL == "" {
+			m.ReferenceURL = cweReferenceURL(m.Tags)
+		}
 		rule.Meta = m
 		if globalRegistry.FindByKey(rule.Meta.Key) != nil {
 			panic(fmt.Sprintf("ollantarules.MustRegister: duplicate key %q", rule.Meta.Key))
 		}
 		globalRegistry.Register(rule)
 	}
+}
+
+func cweReferenceURL(tags []string) string {
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, "cwe-") {
+			if id := strings.TrimPrefix(tag, "cwe-"); id != "" {
+				return "https://cwe.mitre.org/data/definitions/" + id + ".html"
+			}
+		}
+	}
+	return ""
 }

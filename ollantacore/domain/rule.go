@@ -41,4 +41,6 @@ type Rule struct {
 	Rationale        string     `json:"rationale,omitempty"`
 	NoncompliantCode string     `json:"noncompliant_code,omitempty"`
 	CompliantCode    string     `json:"compliant_code,omitempty"`
+	// ReferenceURL is an optional link to official documentation, CWE, or standard.
+	ReferenceURL string `json:"reference_url,omitempty"`
 }
