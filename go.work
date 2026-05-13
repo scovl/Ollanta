@@ -5,7 +5,6 @@ use (
 	./application
 	./domain
 	./ollantacore
-	./ollantaengine
 	./ollantaparser
 	./ollantarules
 	./ollantascanner

@@ -10,7 +10,7 @@ Ollanta is a multi-language static analysis platform in Go. It scans source code
 
 ## Architecture
 
-This is a **Go workspace** (`go.work`) with 10 modules. The root `Makefile` only covers 5 of them; the remaining modules are built and tested with direct `go` commands.
+This is a **Go workspace** (`go.work`) with 9 modules. The root `Makefile` only covers 4 of them; the remaining modules are built and tested with direct `go` commands.
 
 Hexagonal architecture (ports & adapters) with three rings:
 
@@ -20,7 +20,7 @@ Hexagonal architecture (ports & adapters) with three rings:
 | **Middle** | `application/` | `domain/` + `ollantacore/` only |
 | **Outer** | `adapter/`, `ollantaweb/`, `ollantastore/` | Everything |
 
-**Legacy modules** (`ollantacore/`, `ollantaparser/`, `ollantarules/`, `ollantascanner/`, `ollantaengine/`) coexist during migration. New code should target the hexagonal types (`domain/model`, `domain/port`).
+Supporting modules (`ollantacore/`, `ollantaparser/`, `ollantarules/`, `ollantascanner/`) provide shared types, parsing, rules, and the CLI scanner.
 
 ### CGo Boundary
 
@@ -37,11 +37,10 @@ Only `ollantaparser` has CGo (tree-sitter C library). The domain layer uses `any
 | `domain/` | Pure models, port interfaces, domain services | No |
 | `application/` | Use cases: scan, ingest, analysis | No |
 | `adapter/` | HTTP, OAuth, Postgres, Parser, Rules bridge, Telemetry, Webhook | Yes* |
-| `ollantacore/` | Legacy shared types: Issue, Rule, Component, Measure | No |
+| `ollantacore/` | Shared types with type aliases to `domain/model` | No |
 | `ollantaparser/` | Tree-sitter C bindings â€” **only true CGo module** | **Yes** |
 | `ollantarules/` | Rule registry, Go/tree-sitter sensors, metadata | Yes* |
 | `ollantascanner/` | CLI entry point, file discovery, parallel executor | Yes* |
-| `ollantaengine/` | Quality gates, issue tracking, metric summarization | No |
 | `ollantastore/` | PostgreSQL repos (pgx/v5), search (ZincSearch/Postgres FTS) | No |
 | `ollantaweb/` | REST server, ingestion, auth, webhooks (chi/v5) | No |
 
@@ -54,13 +53,15 @@ _*Transitive CGo via `ollantaparser`._
 - Docker & Docker Compose
 - Node.js (for scanner frontend build)
 
+**Windows CGo note:** MSYS2 MinGW's `gcc` must be in `%PATH%`. Add `C:\msys64\mingw64\bin` to your user or system PATH. Without it, `CGO_ENABLED=0` and all `go-tree-sitter` types become unresolvable, breaking flycheck/gopls diagnostics in packages that import it.
+
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `make build` | Build the 5 scanner modules (CGo) |
-| `make test` | Test the 5 scanner modules (CGo) |
-| `make lint` | Lint per module (5 scanner modules separately) |
+| `make build` | Build the 4 scanner modules (CGo) |
+| `make test` | Test the 4 scanner modules (CGo) |
+| `make lint` | Lint per module (4 scanner modules separately) |
 | `make fmt` | Format source code |
 | `make run` | Run scanner + local UI (overridable: `PROJECT_DIR`, `PROJECT_KEY`, `PORT`) |
 | `make push` | Scan + push results to server |
@@ -105,10 +106,10 @@ go test ./adapter/...
 ### CI Pipeline
 
 5 parallel jobs on push/PR to `main`:
-- `test-scanner` (CGo) â€” ollantacore, ollantaparser, ollantarules, ollantascanner, ollantaengine
+- `test-scanner` (CGo) â€” ollantacore, ollantaparser, ollantarules, ollantascanner
 - `test-web` (no CGo) â€” ollantaweb, ollantastore, domain, application
 - `test-adapter` (CGo + Postgres service) â€” adapter/
-- `lint` â€” golangci-lint v2 per module (5 scanner modules)
+- `lint` â€” golangci-lint v2 per module (4 scanner modules)
 - `docker-build` â€” scanner + server image smoke test
 
 **IMPORTANT:** Never run `golangci-lint` at workspace root. Each module has its own `go.mod` â€” lint must run per-module.

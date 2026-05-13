@@ -26,7 +26,6 @@ The root `Makefile` now covers all workspace modules:
 - `domain`
 - `application`
 - `ollantacore`
-- `ollantaengine`
 - `ollantaparser`
 - `ollantarules`
 - `ollantascanner`

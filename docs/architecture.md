@@ -78,15 +78,14 @@ The local scanner UI is embedded into the scanner binary. It serves an interacti
 
 ### Components: fully separated
 
-Ollanta is not a monolithic program. It is composed of **6 independent components**:
+Ollanta is not a monolithic program. It is composed of **5 independent components**:
 
 | Component | It's a... | What it does | Connects to |
 |---|---|---|---|
 | **Scanner** | Binary (`ollanta`) | Analyzes code and generates report | Parser and Rules (inside), Server (HTTP) |
-| **Server** | Binary (`ollantaweb`) | History, API, quality gates | Engine and Store (inside), Database (TCP) |
+| **Server** | Binary (`ollantaweb`) | History, API, quality gates | Store (inside), Database (TCP) |
 | **Parser** | Library (`ollantaparser`) | Transforms code into AST | Scanner (via Go import) |
 | **Rules** | Library (`ollantarules`) | Contains the analysis rules | Scanner (via Go import), Parser (consumes AST) |
-| **Engine** | Library (`ollantaengine`) | Issue tracking, quality gates | Server (via Go import) |
 | **Store** | Library (`ollantastore`) | PostgreSQL persistence + search | Server (via Go import), PostgreSQL, ZincSearch |
 
 #### Where do the rules live?
@@ -129,9 +128,7 @@ flowchart LR
 
     subgraph SERVER["Binary: Server (ollantaweb)"]
         API["REST API"]:::api
-        E["Engine\nTracking,\nquality gates"]:::engine
         ST["Store\nPersistence,\nsearch"]:::store
-        API --> E
         API --> ST
     end
 
@@ -141,7 +138,6 @@ flowchart LR
     classDef parser fill:#ede9fe,stroke:#7c3aed,color:#3b0764
     classDef rules  fill:#fef9c3,stroke:#d97706,color:#1c1917
     classDef api    fill:#d1fae5,stroke:#059669,color:#064e3b
-    classDef engine fill:#fce7f3,stroke:#db2777,color:#831843
     classDef store  fill:#f0fdf4,stroke:#2dd4bf,color:#064e3b
     classDef db     fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
     classDef search fill:#ede9fe,stroke:#7c3aed,color:#3b0764
@@ -524,7 +520,7 @@ flowchart TD
 | — | `js:eqeqeq` in `app.js` hash `e5f6` (new) | **New** — new problem |
 | `py:broad-except` in `main.py` hash `g7h8` (was closed) | Same combo reappears | **Reopened** — came back |
 
-> **Relevant code:** `ollantaengine/tracking/tracker.go` and `domain/service/tracking.go`
+> **Relevant code:** `domain/service/tracking.go`
 
 ### How the Quality Gate works
 
@@ -579,7 +575,7 @@ graph LR
 
 You can create custom gates with additional conditions (minimum coverage, maximum duplication, etc.) and even evaluate **only new code** — useful for teams inheriting legacy projects who want to ensure new code doesn't introduce problems.
 
-> **Relevant code:** `ollantaengine/qualitygate/gate.go`
+> **Relevant code:** `domain/service/gate_evaluator.go`
 
 ---
 
@@ -745,7 +741,7 @@ graph TB
 
 ### How this maps to Go modules
 
-Ollanta has 10 Go modules split into two groups: the **hexagonal core** (new, where code is being migrated) and **legacy modules** (functional, gradually being absorbed):
+Ollanta has 9 Go modules organized by the hexagonal rings:
 
 ```mermaid
 %%{init: {
@@ -763,38 +759,35 @@ Ollanta has 10 Go modules split into two groups: the **hexagonal core** (new, wh
   }
 }}%%
 graph TB
-    subgraph NEW ["  🆕  Hexagonal Core (target)  "]
+    subgraph HEX ["  🏛️  Hexagonal Architecture  "]
         domain["🟢 domain/\nModels + Ports + Pure services\nZero external dependencies"]:::inner
         application["🟡 application/\nUse cases\nDepends only on domain/"]:::middle
         adapter["🔵 adapter/\nHTTP, OAuth, Postgres, Parser\nImplements ports"]:::outer
         domain --> application --> adapter
     end
 
-    subgraph LEGACY ["  🗄️  Legacy Modules (functional, being migrated)  "]
-        ollantacore["ollantacore/\nShared types"]:::leg
-        ollantaparser["ollantaparser/\nTree-sitter (CGo)"]:::leg
-        ollantarules["ollantarules/\nRules & sensors"]:::leg
-        ollantascanner["ollantascanner/\nCLI & orchestration"]:::leg
-        ollantaengine["ollantaengine/\nQuality gates, tracking"]:::leg
-        ollantastore["ollantastore/\nPostgreSQL repos, search"]:::leg
-        ollantaweb["ollantaweb/\nREST server"]:::leg
+    subgraph SUPPORT ["  🧩  Supporting Modules  "]
+        ollantacore["ollantacore/\nShared types + type aliases to domain/model"]:::sup
+        ollantaparser["ollantaparser/\nTree-sitter (CGo)"]:::sup
+        ollantarules["ollantarules/\nRules & sensors"]:::sup
+        ollantascanner["ollantascanner/\nCLI & orchestration"]:::sup
+        ollantastore["ollantastore/\nPostgreSQL repos, search"]:::sup
+        ollantaweb["ollantaweb/\nREST server"]:::sup
     end
 
     ollantacore --> ollantarules
     ollantacore --> ollantascanner
-    ollantacore --> ollantaengine
     ollantaparser --> ollantarules
     ollantarules --> ollantascanner
-    ollantaengine --> ollantaweb
     ollantastore --> ollantaweb
 
     classDef inner  fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#064e3b
     classDef middle fill:#fef9c3,stroke:#d97706,stroke-width:2px,color:#1c1917
     classDef outer  fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e3a5f
-    classDef leg    fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
+    classDef sup    fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
 
-    style NEW    fill:#f0fdf4,stroke:#6ee7b7,stroke-width:2px,stroke-dasharray:6 3
-    style LEGACY fill:#f9fafb,stroke:#d1d5db,stroke-width:2px,stroke-dasharray:6 3
+    style HEX     fill:#f0fdf4,stroke:#6ee7b7,stroke-width:2px,stroke-dasharray:6 3
+    style SUPPORT fill:#f9fafb,stroke:#d1d5db,stroke-width:2px,stroke-dasharray:6 3
 ```
 
 | Module | Ring | CGo? | What it does |
@@ -802,13 +795,12 @@ graph TB
 | `domain` | 🟢 Inner | No | Pure models, port interfaces, I/O-free services |
 | `application` | 🟡 Middle | No | Orchestrates use cases by calling ports |
 | `adapter` | 🔵 Outer | Yes* | Implements ports with concrete technologies |
-| `ollantacore` | Legacy | No | Shared types (`Issue`, `Rule`, `Component`) |
-| `ollantaparser` | Legacy | **Yes** | Only module with CGo (tree-sitter) |
-| `ollantarules` | Legacy | Yes* | Rule registry + Go/tree-sitter sensors |
-| `ollantascanner` | Legacy | Yes* | CLI, file discovery, parallel execution |
-| `ollantaengine` | Legacy | No | Quality gates, tracking, new-code periods |
-| `ollantastore` | Legacy | No | PostgreSQL (pgx/v5), ZincSearch, Postgres FTS |
-| `ollantaweb` | Legacy | No | HTTP server, ingestion, auth, webhooks |
+| `ollantacore` | Supporting | No | Shared types with type aliases to `domain/model` |
+| `ollantaparser` | Supporting | **Yes** | Only module with CGo (tree-sitter) |
+| `ollantarules` | Supporting | Yes* | Rule registry + Go/tree-sitter sensors |
+| `ollantascanner` | Supporting | Yes* | CLI, file discovery, parallel execution |
+| `ollantastore` | Supporting | No | PostgreSQL (pgx/v5), ZincSearch, Postgres FTS |
+| `ollantaweb` | Supporting | No | HTTP server, ingestion, auth, webhooks |
 
 _*CGo via transitive dependency on `ollantaparser`._
 
@@ -841,7 +833,7 @@ The domain only knows these interfaces. Who implements them (PostgreSQL? MongoDB
 
 ---
 
-## Part 6: Advanced Engine Concepts
+## Part 6: Advanced Concepts
 
 ### New Code Period — "what counts as new code?"
 
@@ -881,7 +873,7 @@ graph LR
     classDef opt      fill:#fef9c3,stroke:#d97706,stroke-width:2px,color:#1c1917
 ```
 
-> **Relevant code:** `ollantaengine/newcode/resolver.go`
+> **Relevant code:** `application/analysis/newcode.go`
 
 ### Summarizer — bottom-up metrics
 
@@ -930,7 +922,7 @@ Two algorithms:
 - **CumSum** — sum: the project's total bugs equals the sum of bugs across all files
 - **CumAvg** — weighted average: the project's average complexity accounts for each file's size
 
-> **Relevant code:** `ollantaengine/summarizer/cumsum.go`
+> **Relevant code:** `application/analysis/summarize.go`
 
 ---
 
@@ -1368,8 +1360,8 @@ flowchart TB
 
     Push --> L & TS & TW & TA & DB
 
-    L["🔍 Lint\ngolangci-lint v2\n(5 modules)"]:::job
-    TS["🧪 Test Scanner\nCGO_ENABLED=1\nollantacore, parser,\nrules, scanner, engine"]:::cgo
+    L["🔍 Lint\ngolangci-lint v2\n(4 modules)"]:::job
+    TS["🧪 Test Scanner\nCGO_ENABLED=1\nollantacore, parser,\nrules, scanner"]:::cgo
     TW["🧪 Test Web\nCGO_ENABLED=0\nollantastore, ollantaweb"]:::job
     TA["🧪 Test Adapter\nCGO_ENABLED=1\nadapter/"]:::cgo
     DB["🐳 Docker Build\nSmoke test\nDockerfiles"]:::docker
@@ -1579,7 +1571,6 @@ graph LR
     ollantaparser["ollantaparser\nlanguage parsers\nGo AST · Tree-sitter"]
     ollantarules["ollantarules\nrule definitions\nsensors · thresholds"]
     ollantascanner["ollantascanner\nscan orchestration\nJSON + SARIF output"]
-    ollantaengine["ollantaengine\nquality gates\nissue tracking\nmetric aggregation"]
     ollantastore["ollantastore\nPostgreSQL repos\nZincSearch · Postgres FTS"]
     ollantaweb["ollantaweb\nREST API server\n(Docker entry point)"]
     adapter["adapter/\nHTTP · OAuth · Webhook\nTelemetry · Breaker"]
@@ -1590,9 +1581,7 @@ graph LR
     ollantascanner --> ollantarules
     ollantascanner --> ollantaparser
     ollantascanner --> ollantacore
-    ollantaengine  --> ollantacore
     ollantastore   --> ollantacore
-    adapter --> ollantaengine
     adapter --> ollantastore
     adapter --> ollantascanner
     ollantaweb --> adapter
@@ -1611,7 +1600,6 @@ sequenceDiagram
     participant Parser as ollantaparser
     participant Sensor as Rule Sensor
     participant Rules as ollantarules Registry
-    participant Engine as ollantaengine
     participant Out as Output (JSON/SARIF)
 
     CLI->>Target: discover files by language
@@ -1626,8 +1614,6 @@ sequenceDiagram
         Sensor-->>CLI: []Issue
     end
 
-    CLI->>Engine: evaluate quality gate
-    Engine-->>CLI: gate status (OK / WARN / ERROR)
     CLI->>Out: write report.json + report.sarif
 ```
 
@@ -1686,7 +1672,7 @@ sequenceDiagram
 
 ## Issue Tracking
 
-After each scan, `ollantaengine/tracking` compares results against the previous baseline:
+After each scan, `domain/service/tracking.go` compares results against the previous baseline:
 
 ```mermaid
 stateDiagram-v2

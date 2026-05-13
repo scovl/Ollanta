@@ -213,11 +213,6 @@ var builtinRules = []*domain.Rule{
 		"f, err := os.Open(filepath.Clean(userPath))",
 		"clean := filepath.Clean(userPath)\nif !strings.HasPrefix(clean, safeBase) {\n  return errors.New(\"path traversal detected\")\n}\nf, err := os.Open(clean)",
 		[]string{"security", "path-traversal"}),
-	ruleDetail("go:loop-pointer", "Loop Variable Pointer Capture", "go", domain.TypeBug, domain.SeverityMajor,
-		"Capturing a loop variable by reference inside a goroutine closure causes all goroutines to see the final value of the variable.",
-		"for _, item := range items {\n  go func() {\n    process(item)\n  }()\n}",
-		"for _, item := range items {\n  go func(i Item) {\n    process(i)\n  }(item)\n}",
-		[]string{"correctness", "concurrency"}),
 
 	// ── Wave 2 — Python (8) ───────────────────────────────────────────────────
 	ruleDetail("py:insecure-hash", "Insecure Hash Algorithm", "python", domain.TypeVulnerability, domain.SeverityMajor,

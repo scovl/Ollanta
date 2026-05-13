@@ -51,7 +51,6 @@ The root `Makefile` currently validates only these modules:
 - `ollantaparser`
 - `ollantarules`
 - `ollantascanner`
-- `ollantaengine`
 
 Use:
 

@@ -78,15 +78,14 @@ A UI local do scanner vem embutida no binário do scanner. Ela serve um visualiz
 
 ### Componentes: totalmente separados
 
-Ollanta não é um programa monolítico. Ele é composto por **6 componentes independentes**:
+Ollanta não é um programa monolítico. Ele é composto por **5 componentes independentes**:
 
 | Componente | É um(a)... | O que faz | Conecta-se |
 |---|---|---|---|
 | **Scanner** | Binário (`ollanta`) | Analisa código e gera relatório | Parser e Rules (dentro), Servidor (HTTP) |
-| **Servidor** | Binário (`ollantaweb`) | Histórico, API, quality gates | Engine e Store (dentro), Banco (TCP) |
+| **Servidor** | Binário (`ollantaweb`) | Histórico, API, quality gates | Store (dentro), Banco (TCP) |
 | **Parser** | Biblioteca (`ollantaparser`) | Transforma código em AST | Scanner (via import Go) |
 | **Rules** | Biblioteca (`ollantarules`) | Contém as regras de análise | Scanner (via import Go), Parser (consome AST) |
-| **Engine** | Biblioteca (`ollantaengine`) | Tracking de issues, quality gates | Servidor (via import Go) |
 | **Store** | Biblioteca (`ollantastore`) | Persistência PostgreSQL + busca | Servidor (via import Go), PostgreSQL, ZincSearch |
 
 #### Onde as regras vivem?
@@ -129,9 +128,7 @@ flowchart LR
 
     subgraph SERVER["Binário: Servidor (ollantaweb)"]
         API["API REST"]:::api
-        E["Engine\nTracking,\nquality gates"]:::engine
         ST["Store\nPersistência,\nbusca"]:::store
-        API --> E
         API --> ST
     end
 
@@ -141,7 +138,6 @@ flowchart LR
     classDef parser fill:#ede9fe,stroke:#7c3aed,color:#3b0764
     classDef rules  fill:#fef9c3,stroke:#d97706,color:#1c1917
     classDef api    fill:#d1fae5,stroke:#059669,color:#064e3b
-    classDef engine fill:#fce7f3,stroke:#db2777,color:#831843
     classDef store  fill:#f0fdf4,stroke:#2dd4bf,color:#064e3b
     classDef db     fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
     classDef search fill:#ede9fe,stroke:#7c3aed,color:#3b0764
@@ -529,7 +525,7 @@ flowchart TD
 | — | `js:eqeqeq` em `app.js` hash `e5f6` (nova) | **New** — problema novo |
 | `py:broad-except` em `main.py` hash `g7h8` (estava fechada) | Mesma combinação reaparece | **Reopened** — voltou |
 
-> **Código relevante:** `ollantaengine/tracking/tracker.go` e `domain/service/tracking.go`
+> **Código relevante:** `domain/service/tracking.go`
 
 ### Como o Quality Gate funciona
 
@@ -584,7 +580,7 @@ graph LR
 
 Você pode criar gates personalizados com condições adicionais (cobertura mínima, duplicação máxima, etc.) e até avaliar **apenas o código novo** útil para equipes que herdam projetos legados e querem garantir que código novo não introduza problemas.
 
-> **Código relevante:** `ollantaengine/qualitygate/gate.go`
+> **Código relevante:** `domain/service/gate_evaluator.go`
 
 ---
 
@@ -750,7 +746,7 @@ graph TB
 
 ### Como isso se mapeia nos módulos Go
 
-O Ollanta tem 10 módulos Go. Eles se dividem em dois grupos: o **núcleo hexagonal** (novo, onde o código está sendo migrado) e os **módulos legados** (funcionais, mas sendo gradualmente absorvidos):
+O Ollanta tem 9 módulos Go organizados pelos anéis hexagonais:
 
 ```mermaid
 %%{init: {
@@ -768,38 +764,35 @@ O Ollanta tem 10 módulos Go. Eles se dividem em dois grupos: o **núcleo hexago
   }
 }}%%
 graph TB
-    subgraph NOVO ["  🆕  Núcleo Hexagonal (futuro)  "]
+    subgraph HEX ["  🏛️  Arquitetura Hexagonal  "]
         domain["🟢 domain/\nModelos + Ports + Serviços puros\nZero dependências externas"]:::inner
         application["🟡 application/\nCasos de uso\nDepende apenas de domain/"]:::middle
         adapter["🔵 adapter/\nHTTP, OAuth, Postgres, Parser\nImplementa os ports"]:::outer
         domain --> application --> adapter
     end
 
-    subgraph LEGADO ["  🗄️  Módulos Legados (funcional, sendo migrado)  "]
-        ollantacore["ollantacore/\nTipos compartilhados"]:::leg
-        ollantaparser["ollantaparser/\nTree-sitter (CGo)"]:::leg
-        ollantarules["ollantarules/\nRegras e sensores"]:::leg
-        ollantascanner["ollantascanner/\nCLI e orquestração"]:::leg
-        ollantaengine["ollantaengine/\nQuality gates, tracking"]:::leg
-        ollantastore["ollantastore/\nRepos PostgreSQL, busca"]:::leg
-        ollantaweb["ollantaweb/\nServidor REST"]:::leg
+    subgraph SUPORTE ["  🧩  Módulos de Suporte  "]
+        ollantacore["ollantacore/\nTipos compartilhados + type aliases para domain/model"]:::sup
+        ollantaparser["ollantaparser/\nTree-sitter (CGo)"]:::sup
+        ollantarules["ollantarules/\nRegras e sensores"]:::sup
+        ollantascanner["ollantascanner/\nCLI e orquestração"]:::sup
+        ollantastore["ollantastore/\nRepos PostgreSQL, busca"]:::sup
+        ollantaweb["ollantaweb/\nServidor REST"]:::sup
     end
 
     ollantacore --> ollantarules
     ollantacore --> ollantascanner
-    ollantacore --> ollantaengine
     ollantaparser --> ollantarules
     ollantarules --> ollantascanner
-    ollantaengine --> ollantaweb
     ollantastore --> ollantaweb
 
     classDef inner  fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#064e3b
     classDef middle fill:#fef9c3,stroke:#d97706,stroke-width:2px,color:#1c1917
     classDef outer  fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e3a5f
-    classDef leg    fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
+    classDef sup    fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
 
-    style NOVO    fill:#f0fdf4,stroke:#6ee7b7,stroke-width:2px,stroke-dasharray:6 3
-    style LEGADO  fill:#f9fafb,stroke:#d1d5db,stroke-width:2px,stroke-dasharray:6 3
+    style HEX     fill:#f0fdf4,stroke:#6ee7b7,stroke-width:2px,stroke-dasharray:6 3
+    style SUPORTE fill:#f9fafb,stroke:#d1d5db,stroke-width:2px,stroke-dasharray:6 3
 ```
 
 | Módulo | Anel | CGo? | O que faz |
@@ -807,13 +800,12 @@ graph TB
 | `domain` | 🟢 Interno | Não | Modelos puros, interfaces de port, serviços sem I/O |
 | `application` | 🟡 Médio | Não | Orquestra casos de uso chamando ports |
 | `adapter` | 🔵 Externo | Sim* | Implementa ports com tecnologias concretas |
-| `ollantacore` | Legado | Não | Tipos compartilhados (`Issue`, `Rule`, `Component`) |
-| `ollantaparser` | Legado | **Sim** | Único módulo com CGo (tree-sitter) |
-| `ollantarules` | Legado | Sim* | Registry de regras + sensores Go/tree-sitter |
-| `ollantascanner` | Legado | Sim* | CLI, descoberta de arquivos, execução paralela |
-| `ollantaengine` | Legado | Não | Quality gates, tracking, new-code periods |
-| `ollantastore` | Legado | Não | PostgreSQL (pgx/v5), ZincSearch, Postgres FTS |
-| `ollantaweb` | Legado | Não | Servidor HTTP, ingestão, auth, webhooks |
+| `ollantacore` | Suporte | Não | Tipos compartilhados com type aliases para `domain/model` |
+| `ollantaparser` | Suporte | **Sim** | Único módulo com CGo (tree-sitter) |
+| `ollantarules` | Suporte | Sim* | Registry de regras + sensores Go/tree-sitter |
+| `ollantascanner` | Suporte | Sim* | CLI, descoberta de arquivos, execução paralela |
+| `ollantastore` | Suporte | Não | PostgreSQL (pgx/v5), ZincSearch, Postgres FTS |
+| `ollantaweb` | Suporte | Não | Servidor HTTP, ingestão, auth, webhooks |
 
 _*CGo via transitividade de `ollantaparser`._
 
@@ -846,7 +838,7 @@ O domínio só conhece essas interfaces. Quem as implementa (PostgreSQL? MongoDB
 
 ---
 
-## Parte 6: Conceitos Avançados do Engine
+## Parte 6: Conceitos Avançados
 
 ### New Code Period — "o que é código novo?"
 
@@ -886,7 +878,7 @@ graph LR
     classDef opt      fill:#fef9c3,stroke:#d97706,stroke-width:2px,color:#1c1917
 ```
 
-> **Código relevante:** `ollantaengine/newcode/resolver.go`
+> **Código relevante:** `application/analysis/newcode.go`
 
 ### Summarizer — métricas de baixo para cima
 
@@ -921,7 +913,7 @@ Dois algoritmos:
 - **CumSum** — soma: o total de bugs do projeto é a soma dos bugs de todos os arquivos
 - **CumAvg** — média ponderada: a complexidade média do projeto leva em conta o tamanho de cada arquivo
 
-> **Código relevante:** `ollantaengine/summarizer/cumsum.go`
+> **Código relevante:** `application/analysis/summarize.go`
 
 ---
 
@@ -1350,8 +1342,8 @@ flowchart TB
 
     Push --> L & TS & TW & TA & DB
 
-    L["🔍 Lint\ngolangci-lint v2\n(5 módulos)"]:::job
-    TS["🧪 Test Scanner\nCGO_ENABLED=1\nollantacore, parser,\nrules, scanner, engine"]:::cgo
+    L["🔍 Lint\ngolangci-lint v2\n(4 módulos)"]:::job
+    TS["🧪 Test Scanner\nCGO_ENABLED=1\nollantacore, parser,\nrules, scanner"]:::cgo
     TW["🧪 Test Web\nCGO_ENABLED=0\nollantastore, ollantaweb"]:::job
     TA["🧪 Test Adapter\nCGO_ENABLED=1\nadapter/"]:::cgo
     DB["🐳 Docker Build\nSmoke test dos\nDockerfiles"]:::docker
